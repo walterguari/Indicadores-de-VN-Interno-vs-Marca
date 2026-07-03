@@ -11,6 +11,27 @@ URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5u
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
 
+# --- NUEVA FUNCIÓN: NLP BASADO EN REGLAS PARA COMENTARIOS ---
+def categorizar_comentario(texto):
+    if pd.isna(texto) or str(texto).strip() == "" or str(texto).upper() == "NAN":
+        return "SIN COMENTARIO"
+    t = str(texto).lower()
+    
+    if any(w in t for w in ["vendedor", "atencion", "amable", "cordial", "asesor", "excelente", "trato", "predisposicion"]):
+        return "ATENCIÓN Y ASESORAMIENTO"
+    elif any(w in t for w in ["entrega", "entregaron", "plazo", "retirar", "dia", "fecha", "demora", "tarde"]):
+        return "PROCESO DE ENTREGA / TIEMPOS"
+    elif any(w in t for w in ["precio", "financiacion", "cuota", "pago", "banco", "tasa", "caro", "descuento"]):
+        return "PRECIO Y FINANCIACIÓN"
+    elif any(w in t for w in ["limpieza", "sucio", "lavado", "raya", "detalle", "impecable", "presentacion"]):
+        return "ESTADO Y LIMPIEZA DEL VEHÍCULO"
+    elif any(w in t for w in ["papeleo", "gestor", "patente", "tramite", "firma", "documentacion", "titulo"]):
+        return "GESTORÍA Y ADMINISTRACIÓN"
+    elif any(w in t for w in ["test drive", "manejo", "probar", "prueba", "testdrive"]):
+        return "TEST DRIVE"
+    
+    return "OTROS / GENERAL"
+
 # --- FUNCIONES DE DATOS Y CÁLCULOS ---
 def limpiar_comas_a_numerico(serie):
     """Convierte strings con comas a números flotantes legibles por Python"""
@@ -29,6 +50,15 @@ def load_data(url, tipo_base):
             df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
             if "Vendedor" in df.columns:
                 df["Vendedor"] = df["Vendedor"].astype(str).str.strip().str.upper()
+            
+            # NUEVO: Inyección de Categorización Automática en Marca
+            if "Q13 - Satisfacción Entrega General" not in df.columns:
+                col_q13 = next((c for c in df.columns if 'q13' in c.lower() or 'entrega general' in c.lower()), None)
+                if col_q13: df["Q13 - Satisfacción Entrega General"] = df[col_q13]
+            if "Q3 - Verbalización" in df.columns:
+                df["Categoria_Comentario"] = df["Q3 - Verbalización"].apply(categorizar_comentario)
+            else:
+                df["Categoria_Comentario"] = "SIN COMENTARIO"
                 
         # --- NORMALIZACIÓN ENCUESTAS INTERNAS ---
         elif tipo_base == "Encuestas Internas":
@@ -46,26 +76,28 @@ def load_data(url, tipo_base):
                 df["Nombre de cliente"] = df["Cliente"]
             elif "Nombre de cliente" not in df.columns:
                 df["Nombre de cliente"] = "Cliente Autociel"
+            
+            # NUEVO: Inyección de Categorización Automática en Internas
+            if "COMENTARIO DEL CLIENTE" in df.columns:
+                df["Categoria_Comentario"] = df["COMENTARIO DEL CLIENTE"].apply(categorizar_comentario)
+            else:
+                df["Categoria_Comentario"] = "SIN COMENTARIO"
                 
         # --- NUEVA FUENTE: GESTIÓN DE QUEJAS (Filtro Estricto 2025+) ---
         elif tipo_base == "Gestión de Quejas":
-            # 1. Buscador flexible para columnas críticas de graficación
             col_fecha = next((c for c in df.columns if 'fech' in c.lower()), "Fecha de Gestión")
             col_categorizacion = next((c for c in df.columns if 'categorizac' in c.lower() or 'categorí' in c.lower()), "Categorizacion del Reclamo")
             col_sector = next((c for c in df.columns if 'sector' in c.lower() or 'afect' in c.lower()), "Sector Afectado")
             
             df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             
-            # Filtro temporal obligatorio: solo 2025 en adelante
             df = df[df["Fecha_Filtro"].dt.year >= 2025].copy()
             df["Anio"] = df["Fecha_Filtro"].dt.year
             df["Mes_Num"] = df["Fecha_Filtro"].dt.month
             
-            # Forzar nombres limpios en mayúsculas para los gráficos interactivos
             df["Categorizacion del Reclamo"] = df[col_categorizacion].astype(str).str.strip().str.upper() if col_categorizacion in df.columns else "SIN CATEGORIZAR"
             df["Sector Afectado"] = df[col_sector].astype(str).str.strip().str.upper() if col_sector in df.columns else "SIN SECTOR"
             
-            # 2. Mapeo adaptativo e inteligente para las 8 columnas solicitadas de la tabla inferior
             df["tipo de queja"] = df[next((c for c in df.columns if 'tipo' in c.lower()), df.columns[1])].astype(str).str.strip().str.upper()
             df["marca"] = df[next((c for c in df.columns if 'marc' in c.lower()), df.columns[2])].astype(str).str.strip().str.upper()
             df["cliente"] = df[next((c for c in df.columns if 'client' in c.lower() or 'nombre' in c.lower()), df.columns[3])].astype(str).str.strip().str.upper()
@@ -191,6 +223,80 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
     )
     return fig
 
+# --- NUEVA FUNCIÓN: CONSTRUCCIÓN GRÁFICO RECLAMOS TEMPORALES ---
+def crear_linea_reclamos_porcentaje(df, columnas_evaluar, titulo, meses_n, key_prefix):
+    df_calc = df.copy()
+    if df_calc.empty:
+        fig = go.Figure()
+        fig.update_layout(title=titulo, annotations=[dict(text="Sin Datos", showarrow=False)])
+        return fig
+        
+    # Identificar si la fila posee al menos una nota <= 8
+    def check_is_reclamo(row):
+        for col in columnas_evaluar:
+            if col in df_calc.columns:
+                val = pd.to_numeric(limpiar_comas_a_numerico(pd.Series(row[col])).iloc[0], errors='coerce')
+                if not pd.isna(val) and val <= 8:
+                    return 1
+        return 0
+        
+    df_calc["Es_Reclamo"] = df_calc.apply(check_is_reclamo, axis=1)
+    
+    # Agrupar mensualmente de manera estricta
+    resumen_mes = []
+    for m_num in sorted(df_calc["Mes_Num"].dropna().unique().astype(int)):
+        df_mes = df_calc[df_calc["Mes_Num"] == m_num]
+        total_encuestas = len(df_mes)
+        if total_encuestas == 0: continue
+        
+        cant_reclamos = int(df_mes["Es_Reclamo"].sum())
+        cant_conformes = total_encuestas - cant_reclamos
+        pct_reclamos = (cant_reclamos / total_encuestas) * 100
+        
+        resumen_mes.append({
+            "Mes_Num": m_num,
+            "Mes_Nombre": meses_n[m_num],
+            "Porcentaje Reclamos": round(pct_reclamos, 1),
+            "Cantidad Reclamos": cant_reclamos,
+            "Clientes Conformes": cant_conformes
+        })
+        
+    if not resumen_mes:
+        fig = go.Figure()
+        fig.update_layout(title=titulo, annotations=[dict(text="Muestra insuficiente en los meses", showarrow=False)])
+        return fig
+        
+    df_plot = pd.DataFrame(resumen_mes)
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_plot["Mes_Nombre"],
+        y=df_plot["Porcentaje Reclamos"],
+        mode='lines+markers+text',
+        text=df_plot["Porcentaje Reclamos"].astype(str) + "%",
+        textposition="top center",
+        line=dict(color='#D32F2F', width=3),
+        marker=dict(size=8, symbol='circle'),
+        customdata=df_plot[["Cantidad Reclamos", "Clientes Conformes"]],
+        hovertemplate="<b>📅 Mes: %{x}</b><br>" +
+                      "📈 Porcentaje Reclamos: %{y:.1f}%<br>" +
+                      "<span style='color:red;'>🚨 Cantidad Reclamos: %{customdata[0]}</span><br>" +
+                      "<span style='color:green;'>✅ Clientes Conformes: %{customdata[1]}</span><br>" +
+                      "<extra></extra>"
+    ))
+    
+    fig.update_layout(
+        title=titulo,
+        xaxis_title="Meses",
+        yaxis_title="% Reclamos (Notas <= 8)",
+        yaxis=dict(range=[-5, 105]),
+        height=280,
+        margin=dict(l=30, r=20, t=40, b=20),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
+    return fig
+
 # --- LÓGICA PRINCIPAL ---
 try:
     if 'filtro_val_m' not in st.session_state: st.session_state.filtro_val_m = "Todos"
@@ -198,9 +304,11 @@ try:
     if 'filtro_val_i' not in st.session_state: st.session_state.filtro_val_i = "Todos"
     if 'filtro_col_i' not in st.session_state: st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"
     
-    # Estados de control para interactividad de la pestaña de quejas
     if 'filtro_cat_q' not in st.session_state: st.session_state.filtro_cat_q = "Todas"
     if 'filtro_sec_q' not in st.session_state: st.session_state.filtro_sec_q = "Todos"
+    
+    # NUEVO: Estado interactivo para la pestaña de Análisis de Voz del Cliente
+    if 'feedback_cat_sel' not in st.session_state: st.session_state.feedback_cat_sel = "TODAS"
 
     # --- CARGA SIMULTÁNEA DE BASES ---
     df_m = load_data(URL_MARCA, "Encuestas de Marca")
@@ -282,10 +390,12 @@ try:
 
         st.title("📊 Indicadores y seguimiento de calidad de venta -Autociel")
         
-        tab_global, tab_unificada, tab_individual, tab_quejas = st.tabs([
+        # AJUSTE: Agregada la pestaña de Análisis de Voz del Cliente
+        tab_global, tab_unificada, tab_individual, tab_feedback, tab_quejas = st.tabs([
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
             "👤 Ficha Individual por Asesor",
+            "💬 Análisis de Voz del Cliente",
             "⚠️ Gestión de Quejas"
         ])
 
@@ -425,7 +535,6 @@ try:
                     df_i_v = df_i_v[df_i_v['Comentario Textual'].str.contains(busqueda_i, case=False, na=False)]
                 st.dataframe(df_i_v, use_container_width=True, hide_index=True, height=180)
 
-            # --- CELEBRACIÓN ESPONTÁNEA DEL MONITOR GLOBAL ---
             if (t_m_q2 > 0 and nps_m_q2 >= 100.0) or (t_i_q2 > 0 and nps_i_q2 >= 100.0):
                 st.balloons()
 
@@ -550,7 +659,6 @@ try:
                             tot_nps_i, tot_muest_i = 0.0, 0
                             st.info("Sin registros históricos en la base Interna.")
 
-                # --- CELEBRACIÓN ESPONTÁNEA EN AUDITORÍA INDIVIDUAL POR ASESOR ---
                 if (tot_muest_m > 0 and tot_nps_m >= 100.0) or (tot_muest_i > 0 and tot_nps_i >= 100.0):
                     st.balloons()
 
@@ -583,10 +691,10 @@ try:
                 st.markdown("---")
                 st.markdown("### 📅 Análisis Detallado por Año Seleccionado")
                 
-                anios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                aniios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
                 
                 if anios_vendedor:
-                    anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=anios_vendedor, key="sb_anio_tabla_individual")
+                    anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=aniios_vendedor, key="sb_anio_tabla_individual")
                     df_tabla_m = df_vend_full_m[df_vend_full_m['Anio'] == anio_tabla]
                     df_tabla_i = df_vend_full_i[df_vend_full_i['Anio'] == anio_tabla]
                     
@@ -616,54 +724,129 @@ try:
                     else:
                         st.info(f"No se registran encuestas en ningún mes para el año {anio_tabla}.")
                 else:
-                    st.warning("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
+                    st.info("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # ⚠️ TAB 4: GESTIÓN DE QUEJAS (NUEVOS FILTROS + BOTONES INTERACTIVOS)
+        # 💬 NUEVA TAB 4: ANÁLISIS DE VOZ DEL CLIENTE (FEEDBACK)
+        # ==========================================================
+        with tab_feedback:
+            st.header("💬 Análisis Avanzado de Voz del Cliente")
+            st.markdown("Auditoría de Reclamos e Inteligencia de Texto basada en las opiniones de las encuestas.")
+            
+            # --- MÓDULO 1: GRÁFICOS DE LÍNEA DE PORCENTAJE DE RECLAMOS ---
+            st.markdown("### 📈 Tendencia Mensual del % de Reclamos Potenciales (Notas ≤ 8)")
+            st.markdown("Análisis estricto: Se considera *Reclamo* a cualquier encuesta donde al menos una pregunta clave tenga nota menor o igual a 8.")
+            
+            col_linea_m, col_linea_i = st.columns(2)
+            
+            with col_linea_m:
+                columnas_marca_reclamo = [MAPA_M['q1'], MAPA_M['q2'], MAPA_M['q4'], MAPA_M['q5'], MAPA_M['q8'], MAPA_M['q11'], MAPA_M['q13'], MAPA_M['q15']]
+                fig_linea_m = crear_linea_reclamos_porcentaje(df_m_base, columnas_marca_reclamo, "🏢 Evolución % Reclamos - Encuestas de Marca", meses_n, "marca")
+                st.plotly_chart(fig_linea_m, use_container_width=True)
+                
+            with col_linea_i:
+                columnas_interna_reclamo = [MAPA_I['q1'], MAPA_I['q2'], MAPA_I['q4'], MAPA_I['q8'], MAPA_I['q11'], MAPA_I['q15']]
+                fig_linea_i = crear_linea_reclamos_porcentaje(df_i_base, columnas_interna_reclamo, "🎯 Evolución % Reclamos - Encuestas Internas", meses_n, "interna")
+                st.plotly_chart(fig_linea_i, use_container_width=True)
+                
+            st.markdown("---")
+            
+            # --- MÓDULO 2: BARRAS HORIZONTALES ESPEJO POR TEMÁTICA ---
+            st.markdown("### 📊 Clasificación y Frecuencia de Temas Operativos")
+            col_bar_m, col_bar_i = st.columns(2)
+            
+            with col_bar_m:
+                st.markdown("##### Temáticas en Comentarios de Marca (`Q3`)")
+                df_m_fback = df_m_base[df_m_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
+                if not df_m_fback.empty:
+                    conteo_com_m = df_m_fback["Categoria_Comentario"].value_counts().reset_index()
+                    conteo_com_m.columns = ["Categoría", "Casos"]
+                    fig_bar_m = px.bar(conteo_com_m, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Reds")
+                    fig_bar_m.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
+                    st.plotly_chart(fig_bar_m, use_container_width=True)
+                else:
+                    st.caption("No hay comentarios válidos para categorizar en Marca.")
+                    
+            with col_bar_i:
+                st.markdown("##### Temáticas en Comentarios Internos")
+                df_i_fback = df_i_base[df_i_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
+                if not df_i_fback.empty:
+                    conteo_com_i = df_i_fback["Categoria_Comentario"].value_counts().reset_index()
+                    conteo_com_i.columns = ["Categoría", "Casos"]
+                    fig_bar_i = px.bar(conteo_com_i, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Blues")
+                    fig_bar_i.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
+                    st.plotly_chart(fig_bar_i, use_container_width=True)
+                else:
+                    st.caption("No hay comentarios válidos para categorizar en Encuesta Interna.")
+                    
+            st.markdown("---")
+            
+            # --- MÓDULO 3: CENTRAL DE DRILL-DOWN INTELIGENTE ---
+            st.markdown("### 🔍 Central de Perforación de Texto")
+            st.markdown("Seleccioná un tema estratégico para aislar y leer las verbalizaciones completas de tus clientes.")
+            
+            categorias_fback_disp = ["TODAS", "ATENCIÓN Y ASESORAMIENTO", "PROCESO DE ENTREGA / TIEMPOS", "PRECIO Y FINANCIACIÓN", "ESTADO Y LIMPIEZA DEL VEHÍCULO", "GESTORÍA Y ADMINISTRACIÓN", "TEST DRIVE", "OTROS / GENERAL"]
+            cat_fback_sel = st.selectbox("📌 Filtrar Tabla por Categoría de Feedback:", options=categorias_fback_disp, index=0, key="sb_feedback_cat_drill")
+            
+            f_col_m, f_col_i = st.columns(2)
+            
+            with f_col_m:
+                st.markdown("##### Verbatim Detallado - Marca")
+                df_tabla_fback_m = df_m_base.copy()
+                if cat_fback_sel != "TODAS":
+                    df_tabla_fback_m = df_tabla_fback_m[df_tabla_fback_m["Categoria_Comentario"] == cat_fback_sel]
+                
+                df_tabla_fback_m_v = df_tabla_fback_m[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy()
+                df_tabla_fback_m_v["Fecha de ultimo contacto"] = df_tabla_fback_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                df_tabla_fback_m_v = df_tabla_fback_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                st.dataframe(df_tabla_fback_m_v, use_container_width=True, hide_index=True, height=200)
+                
+            with f_col_i:
+                st.markdown("##### Verbatim Detallado - Internas")
+                df_tabla_fback_i = df_i_base.copy()
+                if cat_fback_sel != "TODAS":
+                    df_tabla_fback_i = df_tabla_fback_i[df_tabla_fback_i["Categoria_Comentario"] == cat_fback_sel]
+                    
+                df_tabla_fback_i_v = df_tabla_fback_i[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy()
+                df_tabla_fback_i_v["Fecha de ultimo contacto"] = df_tabla_fback_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                df_tabla_fback_i_v = df_tabla_fback_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                st.dataframe(df_tabla_fback_i_v, use_container_width=True, hide_index=True, height=200)
+
+        # ==========================================================
+        # ⚠️ TAB 5: GESTIÓN DE QUEJAS
         # ==========================================================
         with tab_quejas:
             st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
             st.markdown("Análisis estratégico de insatisfacción y reclamos ingresados.")
             
             if not df_q.empty:
-                
-                # --- PANEL DE CONTROL DE INTERACTIVIDAD INTERNA ---
                 st.markdown("### 🔄 Panel de Filtro")
                 fc1, fc2, fc3 = st.columns(3)
                 
                 with fc1:
-                    # Aseguramos que Fecha_Filtro sea datetime para extraer el año correctamente
                     if "Fecha_Filtro" in df_q.columns and not pd.api.types.is_datetime64_any_dtype(df_q["Fecha_Filtro"]):
                         df_q["Fecha_Filtro"] = pd.to_datetime(df_q["Fecha_Filtro"])
-                    
-                    # Extraemos los años disponibles dinámicamente
                     anos_disponibles = ["TODOS"] + sorted(list(df_q["Fecha_Filtro"].dt.year.dropna().unique()), reverse=True)
                     anos_disponibles = [str(a) for a in anos_disponibles]
                     ano_filtrado = st.selectbox("📅 Filtrar por Año:", options=anos_disponibles, index=0, key="sb_ctrl_ano")
                     
                 with fc2:
                     meses_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-                    
-                    # Filtro cruzado en cascada para los meses
                     df_temp_mes = df_q.copy()
                     if ano_filtrado != "TODOS":
                         df_temp_mes = df_temp_mes[df_temp_mes["Fecha_Filtro"].dt.year == int(ano_filtrado)]
-                        
                     meses_disp_nums = sorted(list(df_temp_mes["Mes_Num"].dropna().unique()))
                     meses_disponibles = ["TODOS"] + [meses_dict[int(m)] for m in meses_disp_nums]
                     mes_filtrado = st.selectbox("🗓️ Filtrar por Mes:", options=meses_disponibles, index=0, key="sb_ctrl_mes")
                     
                 with fc3:
-                    # Filtro cruzado en cascada para el canal de venta
                     df_temp_canal = df_temp_mes.copy()
                     if mes_filtrado != "TODOS":
                         mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
                         df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"] == mes_num_sel]
-                        
                     canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
                     canal_filtrado = st.selectbox("🔌 Filtrar por Canal de Venta:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
 
-                # --- APLICACIÓN DE LOS FILTROS DINÁMICOS AL DATAFRAME ---
                 df_q_filtrado = df_q.copy()
                 if ano_filtrado != "TODOS":
                     df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
@@ -673,7 +856,6 @@ try:
                 if canal_filtrado != "TODOS":
                     df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
 
-                # --- FILA DE METRICAS PRINCIPALES (DINÁMICAS) ---
                 st.markdown("---")
                 tot_quejas = len(df_q_filtrado)
                 
@@ -683,16 +865,11 @@ try:
                 tasa_resolucion = (tot_resueltos / tot_quejas * 100) if tot_quejas > 0 else 0.0
                 
                 cq1, cq2, cq3 = st.columns(3)
-                with cq1:
-                    st.metric("Volumen de Quejas (Segmento Actual)", f"{tot_quejas} casos")
-                with cq2:
-                    st.metric("Casos Abiertos / Pendientes", f"{tot_abiertos} activos")
-                with cq3:
-                    st.metric("Tasa de Resolución del Filtro", f"{tasa_resolucion:.1f}%", f"{tot_resueltos} solucionados")
+                with cq1: st.metric("Volumen de Quejas (Segmento Actual)", f"{tot_quejas} casos")
+                with cq2: st.metric("Casos Abiertos / Pendientes", f"{tot_abiertos} activos")
+                with cq3: st.metric("Tasa de Resolución del Filtro", f"{tasa_resolucion:.1f}%", f"{tot_resueltos} solucionados")
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                
-                # --- FILA DE GRÁFICOS INTERACTIVOS (EMBUDO + COLUMNAS) ---
                 cg_col1, cg_col2 = st.columns(2)
                 
                 with cg_col1:
@@ -701,31 +878,22 @@ try:
                     df_funnel.columns = ["Categorizacion del Reclamo", "Casos"]
                     
                     if not df_funnel.empty:
-                        fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo",
-                                               color="Categorizacion del Reclamo", 
-                                               color_discrete_sequence=px.colors.sequential.Reds_r)
+                        fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo", color="Categorizacion del Reclamo", color_discrete_sequence=px.colors.sequential.Reds_r)
                         fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
                         st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico")
                         
-                        # --- BOTONES INTERACTIVOS (CATEGORÍA) ---
                         st.markdown(f"**Filtrado por Categoría:** `{st.session_state.filtro_cat_q}`")
                         cols_cat = st.columns(3)
-                        
                         if cols_cat[0].button(" Ver Todas", key="btn_cat_todas", use_container_width=True):
-                            st.session_state.filtro_cat_q = "Todas"
-                            st.rerun()
-                            
-                        # Botones dinámicos para el Top 5 de categorías
+                            st.session_state.filtro_cat_q = "Todas"; st.rerun()
                         for i, row in df_funnel.head(5).reset_index(drop=True).iterrows():
                             col_idx = (i + 1) % 3
                             cat_nombre = str(row["Categorizacion del Reclamo"])
                             btn_texto = f"📌 {cat_nombre[:14]}..." if len(cat_nombre) > 14 else f"📌 {cat_nombre}"
-                            
                             if cols_cat[col_idx].button(btn_texto, key=f"btn_cat_din_{i}", help=cat_nombre, use_container_width=True):
-                                st.session_state.filtro_cat_q = cat_nombre
-                                st.rerun()
+                                st.session_state.filtro_cat_q = cat_nombre; st.rerun()
                     else:
-                        st.info("Sin registros cargados para estructurar el Embudo en esta selección.")
+                        st.info("Sin registros cargados para estructurar el Embudo.")
                         
                 with cg_col2:
                     st.markdown("#### 🏢 Columnas: Frecuencia por Sector Afectado")
@@ -733,37 +901,26 @@ try:
                     df_sectores.columns = ["Sector Afectado", "Casos"]
                     
                     if not df_sectores.empty:
-                        fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos",
-                                              text="Casos", color="Casos", color_continuous_scale="Oranges")
+                        fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos", text="Casos", color="Casos", color_continuous_scale="Oranges")
                         fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
                         st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico")
                         
-                        # --- BOTONES INTERACTIVOS (SECTOR) ---
                         st.markdown(f"**Filtrado por Sector:** `{st.session_state.filtro_sec_q}`")
                         cols_sec = st.columns(3)
-                        
                         if cols_sec[0].button(" Ver Todos", key="btn_sec_todos", use_container_width=True):
-                            st.session_state.filtro_sec_q = "Todos"
-                            st.rerun()
-                            
-                        # Botones dinámicos para el Top 5 de sectores
+                            st.session_state.filtro_sec_q = "Todos"; st.rerun()
                         for i, row in df_sectores.head(5).reset_index(drop=True).iterrows():
                             col_idx = (i + 1) % 3
                             sec_nombre = str(row["Sector Afectado"])
                             btn_texto = f"📌 {sec_nombre[:14]}..." if len(sec_nombre) > 14 else f"📌 {sec_nombre}"
-                            
                             if cols_sec[col_idx].button(btn_texto, key=f"btn_sec_din_{i}", help=sec_nombre, use_container_width=True):
-                                st.session_state.filtro_sec_q = sec_nombre
-                                st.rerun()
+                                st.session_state.filtro_sec_q = sec_nombre; st.rerun()
                     else:
-                        st.info("Sin registros cargados para estructurar las barras de sectores en esta selección.")
-                
-                # --- CENTRAL DE MONITOREO DINÁMICO (TABLA DE CLIENTES FILTRADA) ---
+                        st.info("Sin registros cargados para estructurar las barras de sectores.")
+                        
                 st.markdown("---")
                 st.markdown("### 🔍 Central de Monitoreo Dinámico")
-                st.markdown("La siguiente tabla responde automáticamente a los filtros superiores y a los clics interactivos.")
                 
-                # Clonamos y aplicamos la selección interactiva de los gráficos
                 df_visual_q = df_q_filtrado.copy()
                 if st.session_state.filtro_cat_q != "Todas":
                     df_visual_q = df_visual_q[df_visual_q["Categorizacion del Reclamo"] == st.session_state.filtro_cat_q]
@@ -773,27 +930,19 @@ try:
                 if "Fecha_Filtro" in df_visual_q.columns:
                     df_visual_q["Fecha de Gestión"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
                 
-                # Construcción de tus 8 columnas en el orden estricto solicitado
                 columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario", "Fecha de Gestión", "Reporte tratado por"]
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
-                    "tipo de queja": "Tipo de Queja",
-                    "marca": "Marca",
-                    "cliente": "Cliente",
-                    "vendedor": "Vendedor",
-                    "canal de venta": "Canal de Venta",
-                    "comentario": "Comentario",
-                    "Reporte tratado por": "Reporte Tratado Por"
+                    "tipo de queja": "Tipo de Queja", "marca": "Marca", "cliente": "Cliente", "vendedor": "Vendedor",
+                    "canal de venta": "Canal de Venta", "comentario": "Comentario", "Reporte tratado por": "Reporte Tratado Por"
                 })
                 
-                # Buscador por palabra clave
                 buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave:", "", key="search_quejas_dinamico_input").strip()
                 if buscar_queja:
                     mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
                     df_tabla_final = df_tabla_final[mascara]
                 
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
-                
             else:
-                st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")       
+                st.info("No se encontraron registros de quejas.")       
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
