@@ -11,7 +11,7 @@ URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5u
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
 
-# --- NUEVA FUNCIÓN: NLP BASADO EN REGLAS PARA COMENTARIOS ---
+# --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
     if pd.isna(texto) or str(texto).strip() == "" or str(texto).upper() == "NAN":
         return "SIN COMENTARIO"
@@ -51,7 +51,6 @@ def load_data(url, tipo_base):
             if "Vendedor" in df.columns:
                 df["Vendedor"] = df["Vendedor"].astype(str).str.strip().str.upper()
             
-            # NUEVO: Inyección de Categorización Automática en Marca
             if "Q13 - Satisfacción Entrega General" not in df.columns:
                 col_q13 = next((c for c in df.columns if 'q13' in c.lower() or 'entrega general' in c.lower()), None)
                 if col_q13: df["Q13 - Satisfacción Entrega General"] = df[col_q13]
@@ -77,7 +76,6 @@ def load_data(url, tipo_base):
             elif "Nombre de cliente" not in df.columns:
                 df["Nombre de cliente"] = "Cliente Autociel"
             
-            # NUEVO: Inyección de Categorización Automática en Internas
             if "COMENTARIO DEL CLIENTE" in df.columns:
                 df["Categoria_Comentario"] = df["COMENTARIO DEL CLIENTE"].apply(categorizar_comentario)
             else:
@@ -223,7 +221,6 @@ def crear_grafico_torta(df, columna_o_keyword, titulo):
     )
     return fig
 
-# --- NUEVA FUNCIÓN: CONSTRUCCIÓN GRÁFICO RECLAMOS TEMPORALES ---
 def crear_linea_reclamos_porcentaje(df, columnas_evaluar, titulo, meses_n, key_prefix):
     df_calc = df.copy()
     if df_calc.empty:
@@ -231,7 +228,6 @@ def crear_linea_reclamos_porcentaje(df, columnas_evaluar, titulo, meses_n, key_p
         fig.update_layout(title=titulo, annotations=[dict(text="Sin Datos", showarrow=False)])
         return fig
         
-    # Identificar si la fila posee al menos una nota <= 8
     def check_is_reclamo(row):
         for col in columnas_evaluar:
             if col in df_calc.columns:
@@ -242,7 +238,6 @@ def crear_linea_reclamos_porcentaje(df, columnas_evaluar, titulo, meses_n, key_p
         
     df_calc["Es_Reclamo"] = df_calc.apply(check_is_reclamo, axis=1)
     
-    # Agrupar mensualmente de manera estricta
     resumen_mes = []
     for m_num in sorted(df_calc["Mes_Num"].dropna().unique().astype(int)):
         df_mes = df_calc[df_calc["Mes_Num"] == m_num]
@@ -307,7 +302,6 @@ try:
     if 'filtro_cat_q' not in st.session_state: st.session_state.filtro_cat_q = "Todas"
     if 'filtro_sec_q' not in st.session_state: st.session_state.filtro_sec_q = "Todos"
     
-    # NUEVO: Estado interactivo para la pestaña de Análisis de Voz del Cliente
     if 'feedback_cat_sel' not in st.session_state: st.session_state.feedback_cat_sel = "TODAS"
 
     # --- CARGA SIMULTÁNEA DE BASES ---
@@ -390,7 +384,6 @@ try:
 
         st.title("📊 Indicadores y seguimiento de calidad de venta -Autociel")
         
-        # AJUSTE: Agregada la pestaña de Análisis de Voz del Cliente
         tab_global, tab_unificada, tab_individual, tab_feedback, tab_quejas = st.tabs([
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
@@ -691,10 +684,11 @@ try:
                 st.markdown("---")
                 st.markdown("### 📅 Análisis Detallado por Año Seleccionado")
                 
-                aniios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                # CORRECCIÓN AQUÍ: Ajustada la doble "i" que generaba el error
+                anios_vendedor = sorted(list(set(df_vend_full_m['Anio'].dropna().unique().astype(int)) | set(df_vend_full_i['Anio'].dropna().unique().astype(int))), reverse=True)
                 
                 if anios_vendedor:
-                    anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=aniios_vendedor, key="sb_anio_tabla_individual")
+                    anio_tabla = st.selectbox("Seleccione el año que desea desglosar:", options=anios_vendedor, key="sb_anio_tabla_individual")
                     df_tabla_m = df_vend_full_m[df_vend_full_m['Anio'] == anio_tabla]
                     df_tabla_i = df_vend_full_i[df_vend_full_i['Anio'] == anio_tabla]
                     
@@ -727,7 +721,7 @@ try:
                     st.info("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # 💬 NUEVA TAB 4: ANÁLISIS DE VOZ DEL CLIENTE (FEEDBACK)
+        # 💬 TAB 4: ANÁLISIS DE VOZ DEL CLIENTE (FEEDBACK)
         # ==========================================================
         with tab_feedback:
             st.header("💬 Análisis Avanzado de Voz del Cliente")
@@ -797,8 +791,9 @@ try:
                     df_tabla_fback_m = df_tabla_fback_m[df_tabla_fback_m["Categoria_Comentario"] == cat_fback_sel]
                 
                 df_tabla_fback_m_v = df_tabla_fback_m[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy()
-                df_tabla_fback_m_v["Fecha de ultimo contacto"] = df_tabla_fback_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                df_tabla_fback_m_v = df_tabla_fback_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                if not df_tabla_fback_m_v.empty:
+                    df_tabla_fback_m_v["Fecha de ultimo contacto"] = df_tabla_fback_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                    df_tabla_fback_m_v = df_tabla_fback_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
                 st.dataframe(df_tabla_fback_m_v, use_container_width=True, hide_index=True, height=200)
                 
             with f_col_i:
@@ -808,8 +803,9 @@ try:
                     df_tabla_fback_i = df_tabla_fback_i[df_tabla_fback_i["Categoria_Comentario"] == cat_fback_sel]
                     
                 df_tabla_fback_i_v = df_tabla_fback_i[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy()
-                df_tabla_fback_i_v["Fecha de ultimo contacto"] = df_tabla_fback_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                df_tabla_fback_i_v = df_tabla_fback_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                if not df_tabla_fback_i_v.empty:
+                    df_tabla_fback_i_v["Fecha de ultimo contacto"] = df_tabla_fback_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                    df_tabla_fback_i_v = df_tabla_fback_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
                 st.dataframe(df_tabla_fback_i_v, use_container_width=True, hide_index=True, height=200)
 
         # ==========================================================
@@ -914,7 +910,7 @@ try:
                             sec_nombre = str(row["Sector Afectado"])
                             btn_texto = f"📌 {sec_nombre[:14]}..." if len(sec_nombre) > 14 else f"📌 {sec_nombre}"
                             if cols_sec[col_idx].button(btn_texto, key=f"btn_sec_din_{i}", help=sec_nombre, use_container_width=True):
-                                st.session_state.filtro_sec_q = sec_nombre; st.rerun()
+                                        st.session_state.filtro_sec_q = sec_nombre; st.rerun()
                     else:
                         st.info("Sin registros cargados para estructurar las barras de sectores.")
                         
@@ -943,6 +939,6 @@ try:
                 
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
             else:
-                st.info("No se encontraron registros de quejas.")       
+                st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")       
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
