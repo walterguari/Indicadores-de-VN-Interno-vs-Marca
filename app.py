@@ -963,7 +963,7 @@ try:
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
-                
+    
         # ==========================================================
         # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
@@ -971,6 +971,13 @@ try:
             st.markdown("## 📊 Tablero de Auditoría y Liquidación: Prima de Calidad Venta")
             
             if not df_roar.empty:
+                # --- PARCHE DE SEGURIDAD PARA EL AÑO ---
+                # Si por algún motivo el año no cargó, forzamos la extracción desde cualquier columna de fecha/mes
+                if "Anio" not in df_roar.columns or df_roar["Anio"].isna().all():
+                    col_fech = next((c for c in df_roar.columns if 'fech' in str(c).lower() or 'mes' in str(c).lower()), df_roar.columns[0])
+                    df_roar["Fecha de ultimo contacto"] = pd.to_datetime(df_roar[col_fech], dayfirst=True, errors='coerce')
+                    df_roar["Anio"] = df_roar["Fecha de ultimo contacto"].dt.year
+                
                 # Contenedor desplegable para los filtros
                 with st.expander("⚙️ Filtros de Prima", expanded=True):
                     col_f1, col_f2 = st.columns(2)
@@ -979,32 +986,19 @@ try:
                         # Selector único para el Año
                         anios_roar = sorted(list(df_roar["Anio"].dropna().unique()), reverse=True)
                         anios_roar_str = [str(int(a)) for a in anios_roar if pd.notna(a)]
-                        anio_roar_sel = st.selectbox("Año:", options=anios_roar_str, key="sb_roar_anio_aislado")
+                        anio_roar_sel = st.selectbox("Año:", options=anios_roar_str if anios_roar_str else ["2026"], key="sb_roar_anio_aislado")
                     
                     with col_f2:
-                        # Selector múltiple para las Marcas (estilo etiquetas)
-                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique()))
-                        marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"] # Limpieza visual
+                        # Selector múltiple para las Marcas
+                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["PEUGEOT", "CITROEN"]
+                        marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"]
                         marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
-                # --- Aplicación de Filtros Locales ---
-                df_roar_visual = df_roar.copy() 
-                
-                if anio_roar_sel:
-                    df_roar_visual = df_roar_visual[df_roar_visual["Anio"] == int(anio_roar_sel)]
-                    
-                if marca_roar_sel:
-                    # Al ser un multiselect, usamos .isin() para filtrar las opciones elegidas
-                    df_roar_visual = df_roar_visual[df_roar_visual["Marca_Normalizada"].isin(marca_roar_sel)]
-                
-                # --- Resultados ---
+                # --- Resultados y Lógica 6MM ---
                 st.markdown("---")
                 
-                # ESPACIO RESERVADO PARA ARMAR LA TABLA POR PARTES
-                # 1. Definir los meses para las columnas
-                meses_cols = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
-                # 2. Estructura base de las filas con los objetivos de Ventas
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1013,25 +1007,62 @@ try:
                     {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"}
                 ]
                 
-                # Rellenamos los meses con guiones (hasta tener los datos reales)
-                for fila in datos_umbrales:
-                    for mes in meses_cols:
-                        fila[mes] = "-"
+                # Identificar la columna de Contactado
+                col_q14 = next((c for c in df_roar.columns if 'q14' in str(c).lower() or 'contactado' in str(c).lower()), None)
+                anio_num = int(anio_roar_sel) if anio_roar_sel else 2026
                 
+                fila_6mm = datos_umbrales[1] # Hacemos referencia a la fila del contacto posterior
+                
+                # Iteramos sobre los 12 meses para llenar las columnas
+                for i, mes_nombre in enumerate(meses_nombres):
+                    mes_num = i + 1
+                    
+                    # Calcular el rango de 6 Meses Móviles (Día 1 de hace 5 meses hasta el último día del mes actual)
+                    fecha_inicio_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") - pd.DateOffset(months=5)
+                    fecha_fin_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") + pd.offsets.MonthEnd(1)
+                    
+                    if "Fecha de ultimo contacto" in df_roar.columns and col_q14:
+                        # Filtramos la base completa por este bloque de tiempo
+                        mascara_tiempo = (df_roar["Fecha de ultimo contacto"] >= fecha_inicio_6mm) & (df_roar["Fecha de ultimo contacto"] <= fecha_fin_6mm)
+                        df_bloque_6mm = df_roar[mascara_tiempo].copy()
+                        
+                        # Filtramos por las marcas que eligió el usuario en el expander
+                        if marca_roar_sel and "Marca_Normalizada" in df_bloque_6mm.columns:
+                            df_bloque_6mm = df_bloque_6mm[df_bloque_6mm["Marca_Normalizada"].isin(marca_roar_sel)]
+                            
+                        # Limpiamos y contamos las respuestas "Si" y "No"
+                        respuestas = df_bloque_6mm[col_q14].dropna().astype(str).str.strip().str.upper()
+                        respuestas = respuestas.str.replace('Í', 'I') # Normalizamos SÍ a SI
+                        
+                        total_validas = len(respuestas[respuestas.isin(['SI', 'NO'])])
+                        total_si = len(respuestas[respuestas == 'SI'])
+                        
+                        if total_validas > 0:
+                            porcentaje_6mm = (total_si / total_validas) * 100
+                            fila_6mm[mes_nombre] = f"{porcentaje_6mm:.1f}%"
+                        else:
+                            fila_6mm[mes_nombre] = "-"
+                    else:
+                        fila_6mm[mes_nombre] = "-"
+                    
+                    # Rellenamos las demás filas con guiones por ahora
+                    datos_umbrales[2][mes_nombre] = "-"
+                    datos_umbrales[3][mes_nombre] = "-"
+                    datos_umbrales[4][mes_nombre] = "-"
+                    
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
-                # 3. Lógica visual para igualar el formato de tu imagen
+                # --- Lógica visual (Colores Verde/Rojo) ---
                 def estilar_filas_prima(row):
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
+                    es_contacto = "Contacto Posterior" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
                             if es_cabecera:
-                                # Estilo de la fila de título
                                 estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd;')
                             else:
-                                # Estilo de los nombres de las métricas
                                 estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
                         else:
                             if es_cabecera:
@@ -1039,17 +1070,27 @@ try:
                             else:
                                 val = row[col]
                                 if val == "-":
-                                    # Celdas vacías
                                     estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
                                 else:
-                                    # AQUÍ AGREGAREMOS LOS COLORES VERDE/ROJO LUEGO
-                                    estilos.append('text-align: center;')
+                                    # Pintamos el umbral de Contacto Posterior (Meta >= 80%)
+                                    if es_contacto:
+                                        try:
+                                            # Extraemos el número del texto "85.5%"
+                                            num_val = float(str(val).replace('%', ''))
+                                            if num_val >= 80.0:
+                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;') # VERDE
+                                            else:
+                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;') # ROJO
+                                        except:
+                                            estilos.append('text-align: center;')
+                                    else:
+                                        estilos.append('text-align: center;')
                     return estilos
 
                 # Aplicamos el estilo al DataFrame
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 
-                # Renderizamos la tabla en Streamlit (ocultando el índice numérico)
+                # Ocultamos el índice numérico
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
             else:
