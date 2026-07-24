@@ -10,7 +10,7 @@ st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Au
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
-URL_ROAR = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=877908159"
+URL_ROAR = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/export?format=csv&gid=877908159"
 
 # --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
@@ -107,18 +107,21 @@ def load_data(url, tipo_base):
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
-            # 1. Búsqueda dinámica de la columna fecha para evitar errores por tildes o espacios
-            col_fecha = next((c for c in df.columns if 'contacto' in c.lower() or 'fech' in c.lower()), df.columns[0])
+            # Limpiamos los nombres de las columnas por si tienen espacios ocultos
+            df.columns = df.columns.str.strip()
             
-            df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
-            df["Anio"] = df["Fecha de ultimo contacto"].dt.year
-            
-            # 2. Búsqueda dinámica de la marca y conversión de AP/AC a Peugeot/Citroen
-            col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
-            if col_marca:
+            # 1. Filtro de Año basado exactamente en "Fecha de ultimo contacto"
+            if "Fecha de ultimo contacto" in df.columns:
+                df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
+                df["Anio"] = df["Fecha de ultimo contacto"].dt.year
+            else:
+                df["Anio"] = pd.NA
+                
+            # 2. Filtro de Marca basado exactamente en "Marca"
+            if "Marca" in df.columns:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
-                # Convertimos a mayúsculas y mapeamos
-                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca])
+                # Convertimos a mayúsculas, aplicamos el mapeo y si no es AP/AC dejamos el valor original
+                df["Marca_Normalizada"] = df["Marca"].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df["Marca"])
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
