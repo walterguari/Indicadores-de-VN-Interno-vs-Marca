@@ -107,20 +107,20 @@ def load_data(url, tipo_base):
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
-            # Limpiamos los nombres de las columnas por si tienen espacios ocultos
+            # Paso clave: eliminamos espacios invisibles al principio o final de los títulos
             df.columns = df.columns.str.strip()
             
-            # 1. Filtro de Año basado exactamente en "Fecha de ultimo contacto"
+            # 1. Filtro de Año apuntando exactamente a tu columna
             if "Fecha de ultimo contacto" in df.columns:
                 df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
                 df["Anio"] = df["Fecha de ultimo contacto"].dt.year
             else:
                 df["Anio"] = pd.NA
                 
-            # 2. Filtro de Marca basado exactamente en "Marca"
+            # 2. Filtro de Marca apuntando exactamente a tu columna
             if "Marca" in df.columns:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
-                # Convertimos a mayúsculas, aplicamos el mapeo y si no es AP/AC dejamos el valor original
+                # Convertimos a mayúsculas y mapeamos las siglas
                 df["Marca_Normalizada"] = df["Marca"].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df["Marca"])
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
