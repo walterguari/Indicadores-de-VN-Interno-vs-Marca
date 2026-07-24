@@ -1007,8 +1007,8 @@ try:
                     {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"}
                 ]
                 
-                # Identificar la columna de Contactado (más flexible ante cambios de nombre en la hoja)
-                col_q14 = next((c for c in df_roar.columns if '14' in str(c).lower() or 'contactad' in str(c).lower() or 'contacto' in str(c).lower()), None)
+                # BÚSQUEDA CORREGIDA: Busca estrictamente Q14 o "Contactado" (y se asegura de no agarrar "Fecha de ultimo contacto")
+                col_q14 = next((c for c in df_roar.columns if 'q14' in str(c).lower() or ('contactado' in str(c).lower() and 'fecha' not in str(c).lower())), None)
                 anio_num = int(anio_roar_sel) if anio_roar_sel else 2026
                 
                 fila_cabecera = datos_umbrales[0]
@@ -1020,29 +1020,26 @@ try:
                 # Iteramos sobre los 12 meses para llenar las columnas
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    
-                    # Soluciona el error visual de los "None" en la primera fila
                     fila_cabecera[mes_nombre] = "" 
                     
-                    # Calcular el rango de 6 Meses Móviles (Día 1 de hace 5 meses hasta el último día del mes actual)
+                    # LOGICA 6 MESES MÓVILES EXACTA (Ej: Para Enero = 1 de Agosto al 31 de Enero)
                     fecha_inicio_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") - pd.DateOffset(months=5)
                     fecha_fin_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") + pd.offsets.MonthEnd(1)
                     
                     if "Fecha de ultimo contacto" in df_roar.columns and col_q14:
-                        # Filtramos la base completa por este bloque de tiempo rodante
+                        # 1. Filtramos por el bloque de 6 meses
                         mascara_tiempo = (df_roar["Fecha de ultimo contacto"] >= fecha_inicio_6mm) & (df_roar["Fecha de ultimo contacto"] <= fecha_fin_6mm)
                         df_bloque_6mm = df_roar[mascara_tiempo].copy()
                         
-                        # Filtramos por las marcas que eligió el usuario en el expander
+                        # 2. Filtramos por las marcas seleccionadas (independiente de los filtros globales)
                         if marca_roar_sel and "Marca_Normalizada" in df_bloque_6mm.columns:
                             df_bloque_6mm = df_bloque_6mm[df_bloque_6mm["Marca_Normalizada"].isin(marca_roar_sel)]
                             
-                        # Limpiamos y evaluamos las respuestas "Si" y "No" con máxima flexibilidad
+                        # 3. Matemática: (SI) / (SI + NO) * 100
                         respuestas = df_bloque_6mm[col_q14].dropna().astype(str).str.strip().str.upper()
-                        respuestas = respuestas.str.replace('Í', 'I').str.replace('Á', 'A') # Normalizamos tildes
                         
-                        # Detección inteligente (captura "SI", "SÍ", "S", "CONTACTADO", "NO", "N", etc.)
-                        es_si = respuestas.str.contains(r'^(SI|S|CONTACTADO)', regex=True)
+                        # Atrapa cualquier variación de "Si" y "No"
+                        es_si = respuestas.str.contains(r'^(SI|SÍ|S)', regex=True)
                         es_no = respuestas.str.contains(r'^(NO|N)', regex=True)
                         
                         total_validas = (es_si | es_no).sum()
@@ -1054,10 +1051,9 @@ try:
                         else:
                             fila_6mm[mes_nombre] = "-"
                     else:
-                        # Si no encuentra la columna o las fechas, deja el guion
                         fila_6mm[mes_nombre] = "-"
                     
-                    # Rellenamos las demás filas con guiones a la espera de sus lógicas
+                    # Rellenamos las demás filas con guiones por ahora
                     fila_nps[mes_nombre] = "-"
                     fila_mail[mes_nombre] = "-"
                     fila_muestra[mes_nombre] = "-"
