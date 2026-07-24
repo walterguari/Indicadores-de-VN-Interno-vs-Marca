@@ -107,21 +107,28 @@ def load_data(url, tipo_base):
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
-            # Paso clave: eliminamos espacios invisibles al principio o final de los títulos
-            df.columns = df.columns.str.strip()
+            # 1. LIMPIEZA EXTREMA: Quita saltos de línea (\n), tabulaciones y espacios extra dobles de los títulos
+            df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
             
-            # 1. Filtro de Año apuntando exactamente a tu columna
-            if "Fecha de ultimo contacto" in df.columns:
-                df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
+            # 2. Búsqueda de FECHA a prueba de errores
+            # Busca cualquier columna que contenga la frase, ignorando mayúsculas
+            col_fecha = next((c for c in df.columns if 'fecha de ultimo contacto' in c.lower()), None)
+            
+            if col_fecha:
+                df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
                 df["Anio"] = df["Fecha de ultimo contacto"].dt.year
             else:
                 df["Anio"] = pd.NA
                 
-            # 2. Filtro de Marca apuntando exactamente a tu columna
-            if "Marca" in df.columns:
+            # 3. Búsqueda de MARCA a prueba de errores
+            # Como tienes MARCA en la col F y Marca en la col N, buscamos la que contenga "AP" o "AC"
+            # O simplemente aplicamos el mapeo a la primera que encuentre que se llame "Marca"
+            col_marca = next((c for c in df.columns if 'marca' in c.lower() or 'mar ca' in c.lower()), None)
+            
+            if col_marca:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
-                # Convertimos a mayúsculas y mapeamos las siglas
-                df["Marca_Normalizada"] = df["Marca"].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df["Marca"])
+                # Mapeamos AP/AC. Si ya decía Peugeot (por tomar la columna F por error), se conserva intacto.
+                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
