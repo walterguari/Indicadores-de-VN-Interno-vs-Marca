@@ -1001,7 +1001,56 @@ try:
                 st.markdown("---")
                 
                 # ESPACIO RESERVADO PARA ARMAR LA TABLA POR PARTES
-                st.info("Filtros configurados. Espacio listo para comenzar a armar la tabla de métricas por meses...")
+                # 1. Definir los meses para las columnas
+                meses_cols = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                
+                # 2. Estructura base de las filas con los objetivos de Ventas
+                datos_umbrales = [
+                    {"Mes": "🔑 UMBRALES (VENTAS)"},
+                    {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
+                    {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)"},
+                    {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)"},
+                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"}
+                ]
+                
+                # Rellenamos los meses con guiones (hasta tener los datos reales)
+                for fila in datos_umbrales:
+                    for mes in meses_cols:
+                        fila[mes] = "-"
+                
+                df_umbrales = pd.DataFrame(datos_umbrales)
+                
+                # 3. Lógica visual para igualar el formato de tu imagen
+                def estilar_filas_prima(row):
+                    estilos = []
+                    es_cabecera = "🔑" in str(row["Mes"])
+                    
+                    for col in row.index:
+                        if col == "Mes":
+                            if es_cabecera:
+                                # Estilo de la fila de título
+                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd;')
+                            else:
+                                # Estilo de los nombres de las métricas
+                                estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
+                        else:
+                            if es_cabecera:
+                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd;')
+                            else:
+                                val = row[col]
+                                if val == "-":
+                                    # Celdas vacías
+                                    estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
+                                else:
+                                    # AQUÍ AGREGAREMOS LOS COLORES VERDE/ROJO LUEGO
+                                    estilos.append('text-align: center;')
+                    return estilos
+
+                # Aplicamos el estilo al DataFrame
+                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
+                
+                # Renderizamos la tabla en Streamlit (ocultando el índice numérico)
+                st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
