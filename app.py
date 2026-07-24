@@ -1039,8 +1039,8 @@ try:
                         respuestas = df_bloque_6mm[col_q14].dropna().astype(str).str.strip().str.upper()
                         
                         # Atrapa cualquier variación de "Si" y "No"
-                        es_si = respuestas.str.contains(r'^(SI|SÍ|S)', regex=True)
-                        es_no = respuestas.str.contains(r'^(NO|N)', regex=True)
+                        es_si = respuestas.str.contains(r'^(Si|SÍ|S)', regex=True)
+                        es_no = respuestas.str.contains(r'^(No|N)', regex=True)
                         
                         total_validas = (es_si | es_no).sum()
                         total_si = es_si.sum()
