@@ -107,11 +107,20 @@ def load_data(url, tipo_base):
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
-            df["Fecha de ultimo contacto"] = pd.to_datetime(df["Fecha de ultimo contacto"], dayfirst=True, errors='coerce')
+            # 1. Búsqueda dinámica de la columna fecha para evitar errores por tildes o espacios
+            col_fecha = next((c for c in df.columns if 'contacto' in c.lower() or 'fech' in c.lower()), df.columns[0])
+            
+            df["Fecha de ultimo contacto"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             df["Anio"] = df["Fecha de ultimo contacto"].dt.year
             
-            mapeo_marcas = {"AP": "Peugeot", "AC": "Citroen"}
-            df["Marca_Normalizada"] = df["Marca"].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df["Marca"])
+            # 2. Búsqueda dinámica de la marca y conversión de AP/AC a Peugeot/Citroen
+            col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
+            if col_marca:
+                mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
+                # Convertimos a mayúsculas y mapeamos
+                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca])
+            else:
+                df["Marca_Normalizada"] = "SIN MARCA"
             
         return df
     except Exception as e:
@@ -950,23 +959,27 @@ try:
         # ==========================================================
         with tab_prima:
             st.header("🏆 Prima de Calidad (Encuestas Roar)")
-            st.markdown("Seguimiento y visualización de datos de las encuestas base Roar.")
+            st.markdown("Seguimiento y visualización de datos de las encuestas base Roar. **(Filtros Independientes)**")
             
             if not df_roar.empty:
-                st.markdown("### 🔄 Filtros de Prima de Calidad")
+                st.markdown("### 🔄 Filtros Exclusivos de la Pestaña")
                 col_f1, col_f2 = st.columns(2)
                 
                 with col_f1:
+                    # Filtro Aislado: Año
                     anios_roar = sorted(list(df_roar["Anio"].dropna().unique()), reverse=True)
                     anios_roar_str = ["TODOS"] + [str(int(a)) for a in anios_roar if pd.notna(a)]
-                    anio_roar_sel = st.selectbox("📅 Filtrar por Año:", options=anios_roar_str, key="sb_roar_anio")
+                    anio_roar_sel = st.selectbox("📅 Filtrar por Año:", options=anios_roar_str, key="sb_roar_anio_aislado")
                 
                 with col_f2:
+                    # Filtro Aislado: Marca (Ya normalizada como PEUGEOT / CITROEN)
                     marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique()))
                     marcas_roar_disp = ["TODAS"] + marcas_roar
-                    marca_roar_sel = st.selectbox("🏢 Filtrar por Marca:", options=marcas_roar_disp, key="sb_roar_marca")
+                    marca_roar_sel = st.selectbox("🏢 Filtrar por Marca:", options=marcas_roar_disp, key="sb_roar_marca_aislada")
                 
-                df_roar_visual = df_roar.copy()
+                # --- Aplicación de Filtros Locales ---
+                # Tomamos la base pura (df_roar), ignorando los filtros globales de la barra lateral
+                df_roar_visual = df_roar.copy() 
                 
                 if anio_roar_sel != "TODOS":
                     df_roar_visual = df_roar_visual[df_roar_visual["Anio"] == int(anio_roar_sel)]
@@ -974,15 +987,24 @@ try:
                 if marca_roar_sel != "TODAS":
                     df_roar_visual = df_roar_visual[df_roar_visual["Marca_Normalizada"] == marca_roar_sel]
                 
+                # --- Resultados ---
                 st.markdown("---")
                 st.metric("Total de Registros en la vista actual", len(df_roar_visual))
                 
-                cols_mostrar = [c for c in df_roar_visual.columns if c not in ["Marca", "Anio", "Marca_Normalizada"]]
-                cols_mostrar = ["Marca_Normalizada"] + cols_mostrar 
+                # Ocultamos la columna original para evitar confusiones y mostramos la Normalizada
+                columnas_disponibles = df_roar_visual.columns.tolist()
+                if "Marca" in columnas_disponibles:
+                    columnas_disponibles.remove("Marca")
+                if "Anio" in columnas_disponibles:
+                    columnas_disponibles.remove("Anio")
+                if "Marca_Normalizada" in columnas_disponibles:
+                    columnas_disponibles.remove("Marca_Normalizada")
+                    # La ponemos al principio para que sea lo primero que se lea
+                    columnas_disponibles = ["Marca_Normalizada"] + columnas_disponibles 
                 
-                st.dataframe(df_roar_visual[cols_mostrar], use_container_width=True, hide_index=True, height=400)
+                st.dataframe(df_roar_visual[columnas_disponibles], use_container_width=True, hide_index=True, height=400)
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
-                
+                       
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
