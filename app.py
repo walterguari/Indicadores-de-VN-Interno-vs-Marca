@@ -968,51 +968,41 @@ try:
         # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
         with tab_prima:
-            st.header("🏆 Prima de Calidad (Encuestas Roar)")
-            st.markdown("Seguimiento y visualización de datos de las encuestas base Roar. **(Filtros Independientes)**")
+            st.markdown("## 📊 Tablero de Auditoría y Liquidación: Prima de Calidad Venta")
             
             if not df_roar.empty:
-                st.markdown("### 🔄 Filtros Exclusivos de la Pestaña")
-                col_f1, col_f2 = st.columns(2)
-                
-                with col_f1:
-                    # Filtro Aislado: Año
-                    anios_roar = sorted(list(df_roar["Anio"].dropna().unique()), reverse=True)
-                    anios_roar_str = ["TODOS"] + [str(int(a)) for a in anios_roar if pd.notna(a)]
-                    anio_roar_sel = st.selectbox("📅 Filtrar por Año:", options=anios_roar_str, key="sb_roar_anio_aislado")
-                
-                with col_f2:
-                    # Filtro Aislado: Marca (Ya normalizada como PEUGEOT / CITROEN)
-                    marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique()))
-                    marcas_roar_disp = ["TODAS"] + marcas_roar
-                    marca_roar_sel = st.selectbox("🏢 Filtrar por Marca:", options=marcas_roar_disp, key="sb_roar_marca_aislada")
+                # Contenedor desplegable para los filtros
+                with st.expander("⚙️ Filtros de Prima", expanded=True):
+                    col_f1, col_f2 = st.columns(2)
+                    
+                    with col_f1:
+                        # Selector único para el Año
+                        anios_roar = sorted(list(df_roar["Anio"].dropna().unique()), reverse=True)
+                        anios_roar_str = [str(int(a)) for a in anios_roar if pd.notna(a)]
+                        anio_roar_sel = st.selectbox("Año:", options=anios_roar_str, key="sb_roar_anio_aislado")
+                    
+                    with col_f2:
+                        # Selector múltiple para las Marcas (estilo etiquetas)
+                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique()))
+                        marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"] # Limpieza visual
+                        marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
                 # --- Aplicación de Filtros Locales ---
-                # Tomamos la base pura (df_roar), ignorando los filtros globales de la barra lateral
                 df_roar_visual = df_roar.copy() 
                 
-                if anio_roar_sel != "TODOS":
+                if anio_roar_sel:
                     df_roar_visual = df_roar_visual[df_roar_visual["Anio"] == int(anio_roar_sel)]
                     
-                if marca_roar_sel != "TODAS":
-                    df_roar_visual = df_roar_visual[df_roar_visual["Marca_Normalizada"] == marca_roar_sel]
+                if marca_roar_sel:
+                    # Al ser un multiselect, usamos .isin() para filtrar las opciones elegidas
+                    df_roar_visual = df_roar_visual[df_roar_visual["Marca_Normalizada"].isin(marca_roar_sel)]
                 
                 # --- Resultados ---
                 st.markdown("---")
-                st.metric("Total de Registros en la vista actual", len(df_roar_visual))
                 
-                # Ocultamos la columna original para evitar confusiones y mostramos la Normalizada
-                columnas_disponibles = df_roar_visual.columns.tolist()
-                if "Marca" in columnas_disponibles:
-                    columnas_disponibles.remove("Marca")
-                if "Anio" in columnas_disponibles:
-                    columnas_disponibles.remove("Anio")
-                if "Marca_Normalizada" in columnas_disponibles:
-                    columnas_disponibles.remove("Marca_Normalizada")
-                    # La ponemos al principio para que sea lo primero que se lea
-                    columnas_disponibles = ["Marca_Normalizada"] + columnas_disponibles 
+                # ESPACIO RESERVADO PARA ARMAR LA TABLA POR PARTES
+                st.info("Filtros configurados. Espacio listo para comenzar a armar la tabla de métricas por meses...")
                 
-                st.dataframe(df_roar_visual[columnas_disponibles], use_container_width=True, hide_index=True, height=400)
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
                        
