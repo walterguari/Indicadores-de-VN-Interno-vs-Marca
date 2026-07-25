@@ -107,10 +107,7 @@ def load_data(url, tipo_base):
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
-            # 1. LIMPIEZA EXTREMA: Quita saltos de línea (\n), tabulaciones y espacios extra dobles de los títulos
             df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-            
-            # 2. Búsqueda de FECHA a prueba de errores
             col_fecha = next((c for c in df.columns if 'fecha de ultimo contacto' in c.lower()), None)
             
             if col_fecha:
@@ -119,9 +116,7 @@ def load_data(url, tipo_base):
             else:
                 df["Anio"] = pd.NA
                 
-            # 3. Búsqueda de MARCA a prueba de errores
             col_marca = next((c for c in df.columns if 'marca' in c.lower() or 'mar ca' in c.lower()), None)
-            
             if col_marca:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
@@ -397,34 +392,6 @@ try:
         df_i['Cat_Filtro_Dinamica'] = limpiar_comas_a_numerico(df_i[MAPA_I['q1']]).apply(generar_categorias)
         df_i['Cat_Filtro_Q2'] = limpiar_comas_a_numerico(df_i[MAPA_I['q2']]).apply(generar_categorias)
 
-        # --- SIDEBAR (FILTROS GLOBALES UNIFICADOS) ---
-        st.sidebar.header("Filtros Globales")
-        
-        anios_combinados = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
-        anio_sel = st.sidebar.selectbox("Año", options=anios_combinados if anios_combinados else [2026], key="sb_anio_unif")
-        
-        meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-        set_meses = set(df_m[df_m['Anio'] == anio_sel]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel]['Mes_Num'].unique())
-        meses_disp_nums = sorted(list(set_meses))
-        meses_disp_nombres = [meses_n[m] for m in meses_disp_nums] if meses_disp_nums else ["Mayo"]
-        
-        meses_sel_nombres = st.sidebar.multiselect("Seleccione Mes(es)", options=meses_disp_nombres, default=meses_disp_nombres[-1:], key="sb_meses_unif")
-        meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
-
-        df_m_time = df_m[(df_m["Anio"] == anio_sel) & (df_m["Mes_Num"].isin(meses_sel_nums))]
-        df_i_time = df_i[(df_i["Anio"] == anio_sel) & (df_i["Mes_Num"].isin(meses_sel_nums))]
-
-        marcas_disponibles = sorted(list(set(df_m_time["MARCA"].dropna().unique()) | set(df_i_time["MARCA"].dropna().unique())))
-        marcas = st.sidebar.multiselect("MARCA", options=marcas_disponibles, default=marcas_disponibles, key="sb_marcas_unif")
-
-        canales_m = set(df_m_time[df_m_time["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
-        canales_i = set(df_i_time[df_i_time["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
-        canales_disponibles = sorted(list(canales_m | canales_i))
-        canales = st.sidebar.multiselect("Canal de Venta", options=canales_disponibles, default=canales_disponibles, key="sb_canales_unif")
-
-        df_m_base = df_m_time[(df_m_time["MARCA"].isin(marcas)) & (df_m_time["Canal de Venta"].isin(canales))]
-        df_i_base = df_i_time[(df_i_time["MARCA"].isin(marcas)) & (df_i_time["Canal de Venta"].isin(canales))]
-
         st.title("📊 Indicadores y seguimiento de calidad de venta -Autociel")
         
         tab_global, tab_unificada, tab_individual, tab_feedback, tab_quejas, tab_prima = st.tabs([
@@ -440,6 +407,33 @@ try:
         # TAB 1: MONITOR GLOBAL
         # ==========================================================
         with tab_global:
+            with st.expander("⚙️ Filtros del Monitor Global", expanded=True):
+                col_fg1, col_fg2, col_fg3 = st.columns(3)
+                with col_fg1:
+                    anios_comb_g = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                    anio_sel = st.selectbox("Año:", options=anios_comb_g if anios_comb_g else [2026], key="g_anio")
+                with col_fg2:
+                    meses_n = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+                    set_meses_g = set(df_m[df_m['Anio'] == anio_sel]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel]['Mes_Num'].unique())
+                    meses_disp_nums_g = sorted(list(set_meses_g))
+                    meses_disp_nombres_g = [meses_n[m] for m in meses_disp_nums_g] if meses_disp_nums_g else ["Mayo"]
+                    meses_sel_nombres = st.multiselect("Seleccione Mes(es):", options=meses_disp_nombres_g, default=meses_disp_nombres_g[-1:], key="g_meses")
+                    meses_sel_nums = [k for k, v in meses_n.items() if v in meses_sel_nombres]
+                with col_fg3:
+                    marcas_disp_g = sorted(list(set(df_m["MARCA"].dropna().unique()) | set(df_i["MARCA"].dropna().unique())))
+                    marcas = st.multiselect("MARCA:", options=marcas_disp_g, default=marcas_disp_g, key="g_marcas")
+
+                canales_m_g = set(df_m[df_m["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
+                canales_i_g = set(df_i[df_i["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
+                canales_disp_g = sorted(list(canales_m_g | canales_i_g))
+                canales = st.multiselect("Canal de Venta:", options=canales_disp_g, default=canales_disp_g, key="g_canales")
+
+            df_m_time = df_m[(df_m["Anio"] == anio_sel) & (df_m["Mes_Num"].isin(meses_sel_nums))]
+            df_i_time = df_i[(df_i["Anio"] == anio_sel) & (df_i["Mes_Num"].isin(meses_sel_nums))]
+
+            df_m_base = df_m_time[(df_m_time["MARCA"].isin(marcas)) & (df_m_time["Canal de Venta"].isin(canales))]
+            df_i_base = df_i_time[(df_i_time["MARCA"].isin(marcas)) & (df_i_time["Canal de Venta"].isin(canales))]
+
             st.header(f"Resultados en Paralelo: {', '.join(meses_sel_nombres)}")
             sc_marca, sc_interna = st.columns([1, 1])
             
@@ -576,16 +570,41 @@ try:
         # TAB 2: TABLA UNIFICADA DE ASESORES
         # ==========================================================
         with tab_unificada:
+            with st.expander("⚙️ Filtros de Asesores", expanded=True):
+                col_fu1, col_fu2, col_fu3 = st.columns(3)
+                with col_fu1:
+                    anios_comb_u = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                    anio_sel_u = st.selectbox("Año:", options=anios_comb_u if anios_comb_u else [2026], key="u_anio")
+                with col_fu2:
+                    set_meses_u = set(df_m[df_m['Anio'] == anio_sel_u]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel_u]['Mes_Num'].unique())
+                    meses_disp_nums_u = sorted(list(set_meses_u))
+                    meses_disp_nombres_u = [meses_n[m] for m in meses_disp_nums_u] if meses_disp_nums_u else ["Mayo"]
+                    meses_sel_nombres_u = st.multiselect("Seleccione Mes(es):", options=meses_disp_nombres_u, default=meses_disp_nombres_u[-1:], key="u_meses")
+                    meses_sel_nums_u = [k for k, v in meses_n.items() if v in meses_sel_nombres_u]
+                with col_fu3:
+                    marcas_disp_u = sorted(list(set(df_m["MARCA"].dropna().unique()) | set(df_i["MARCA"].dropna().unique())))
+                    marcas_u = st.multiselect("MARCA:", options=marcas_disp_u, default=marcas_disp_u, key="u_marcas")
+
+                canales_m_u = set(df_m[df_m["MARCA"].isin(marcas_u)]["Canal de Venta"].dropna().unique())
+                canales_i_u = set(df_i[df_i["MARCA"].isin(marcas_u)]["Canal de Venta"].dropna().unique())
+                canales_disp_u = sorted(list(canales_m_u | canales_i_u))
+                canales_u = st.multiselect("Canal de Venta:", options=canales_disp_u, default=canales_disp_u, key="u_canales")
+
+            df_m_time_u = df_m[(df_m["Anio"] == anio_sel_u) & (df_m["Mes_Num"].isin(meses_sel_nums_u))]
+            df_i_time_u = df_i[(df_i["Anio"] == anio_sel_u) & (df_i["Mes_Num"].isin(meses_sel_nums_u))]
+            df_m_base_u = df_m_time_u[(df_m_time_u["MARCA"].isin(marcas_u)) & (df_m_time_u["Canal de Venta"].isin(canales_u))]
+            df_i_base_u = df_i_time_u[(df_i_time_u["MARCA"].isin(marcas_u)) & (df_i_time_u["Canal de Venta"].isin(canales_u))]
+
             st.header("Ranking de Performance Comercial Integrado")
             st.markdown("Evaluación unificada bajo la metodología estricta de **NPS** para todos los indicadores operativos.")
             
-            vendedores_unificados = sorted(list(set(df_m_base["Vendedor"].dropna().unique()) | set(df_i_base["Vendedor"].dropna().unique())))
+            vendedores_unificados = sorted(list(set(df_m_base_u["Vendedor"].dropna().unique()) | set(df_i_base_u["Vendedor"].dropna().unique())))
             
             if vendedores_unificados:
                 resumen_master = []
                 for vend in vendedores_unificados:
-                    data_m = df_m_base[df_m_base["Vendedor"] == vend]
-                    data_i = df_i_base[df_i_base["Vendedor"] == vend]
+                    data_m = df_m_base_u[df_m_base_u["Vendedor"] == vend]
+                    data_i = df_i_base_u[df_i_base_u["Vendedor"] == vend]
                     
                     if not data_m.empty:
                         nm_q2, pm_q2, _, dm_q2, tm_q2 = calcular_nps_detallado(data_m[MAPA_M['q2']])
@@ -761,6 +780,31 @@ try:
         # 💬 TAB 4: ANÁLISIS DE VOZ DEL CLIENTE (FEEDBACK)
         # ==========================================================
         with tab_feedback:
+            with st.expander("⚙️ Filtros de Voz del Cliente", expanded=True):
+                col_ff1, col_ff2, col_ff3 = st.columns(3)
+                with col_ff1:
+                    anios_comb_f = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                    anio_sel_f = st.selectbox("Año:", options=anios_comb_f if anios_comb_f else [2026], key="f_anio")
+                with col_ff2:
+                    set_meses_f = set(df_m[df_m['Anio'] == anio_sel_f]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel_f]['Mes_Num'].unique())
+                    meses_disp_nums_f = sorted(list(set_meses_f))
+                    meses_disp_nombres_f = [meses_n[m] for m in meses_disp_nums_f] if meses_disp_nums_f else ["Mayo"]
+                    meses_sel_nombres_f = st.multiselect("Seleccione Mes(es):", options=meses_disp_nombres_f, default=meses_disp_nombres_f[-1:], key="f_meses")
+                    meses_sel_nums_f = [k for k, v in meses_n.items() if v in meses_sel_nombres_f]
+                with col_ff3:
+                    marcas_disp_f = sorted(list(set(df_m["MARCA"].dropna().unique()) | set(df_i["MARCA"].dropna().unique())))
+                    marcas_f = st.multiselect("MARCA:", options=marcas_disp_f, default=marcas_disp_f, key="f_marcas")
+
+                canales_m_f = set(df_m[df_m["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
+                canales_i_f = set(df_i[df_i["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
+                canales_disp_f = sorted(list(canales_m_f | canales_i_f))
+                canales_f = st.multiselect("Canal de Venta:", options=canales_disp_f, default=canales_disp_f, key="f_canales")
+
+            df_m_time_f = df_m[(df_m["Anio"] == anio_sel_f) & (df_m["Mes_Num"].isin(meses_sel_nums_f))]
+            df_i_time_f = df_i[(df_i["Anio"] == anio_sel_f) & (df_i["Mes_Num"].isin(meses_sel_nums_f))]
+            df_m_base = df_m_time_f[(df_m_time_f["MARCA"].isin(marcas_f)) & (df_m_time_f["Canal de Venta"].isin(canales_f))]
+            df_i_base = df_i_time_f[(df_i_time_f["MARCA"].isin(marcas_f)) & (df_i_time_f["Canal de Venta"].isin(canales_f))]
+
             st.header("💬 Análisis Avanzado de Voz del Cliente")
             st.markdown("Auditoría de Reclamos e Inteligencia de Texto basada en las opiniones de las encuestas.")
             
@@ -1019,9 +1063,6 @@ try:
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"}
                 ]
                 
-                # Matriz espejo para guardar los tooltips
-                datos_tooltips = [{"Mes": ""} for _ in range(11)]
-                
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
                 anio_num = int(anio_roar_sel) if anio_roar_sel else 2026
                 
@@ -1043,7 +1084,6 @@ try:
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
                     for r in range(11): datos_umbrales[r][mes_nombre] = "-"
-                    for r in range(11): datos_tooltips[r][mes_nombre] = ""
                     datos_umbrales[0][mes_nombre] = "" 
                     datos_umbrales[5][mes_nombre] = ""
                     
@@ -1131,22 +1171,14 @@ try:
                     inc_q15 = get_inc(nps_q15, 'q15') if llaves_ok else 0.0
                     inc_tot = inc_q2 + inc_q8 + inc_q4 + inc_q15
                     
-                    # Escritura de resultados y tooltips
+                    # Escritura de resultados
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
                     datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
-                    
-                    tt_msg = "✅ Llaves de Acceso: CUMPLIDAS" if llaves_ok else "🚨 Llaves de Acceso: BLOQUEADO (0%)"
-                    datos_tooltips[6][mes_nombre] = f"NPS Obtenido: {nps_q2:.1f}% | {tt_msg}"
-                    datos_tooltips[7][mes_nombre] = f"NPS Obtenido: {nps_q8:.1f}% | {tt_msg}"
-                    datos_tooltips[8][mes_nombre] = f"NPS Obtenido: {nps_q4:.1f}% | {tt_msg}"
-                    datos_tooltips[9][mes_nombre] = f"NPS Obtenido: {nps_q15:.1f}% | {tt_msg}"
-                    datos_tooltips[10][mes_nombre] = tt_msg
 
                 df_umbrales = pd.DataFrame(datos_umbrales)
-                df_tooltips = pd.DataFrame(datos_tooltips)
                 
                 def estilar_filas_prima(row):
                     estilos = []
@@ -1200,7 +1232,6 @@ try:
                                     estilos.append('text-align: center;')
                     return estilos
 
-                # Aplicamos estilo (sin tooltips para evitar conflicto HTML con Streamlit)
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
