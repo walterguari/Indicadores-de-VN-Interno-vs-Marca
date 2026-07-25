@@ -1014,11 +1014,12 @@ try:
                 fila_6mm = datos_umbrales[1]
                 
                 # Iteramos sobre los 12 meses para llenar las columnas
+                # Iteramos sobre los 12 meses para llenar las columnas
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
                     fila_cabecera[mes_nombre] = "" 
                     
-                    # LOGICA 6 MESES MÓVILES (Ej: Para Enero = 1 de Agosto al 31 de Enero)
+                    # LOGICA 6 MESES MÓVILES EXACTA (Ej: Para Enero = 1 de Agosto al 31 de Enero)
                     fecha_inicio_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") - pd.DateOffset(months=5)
                     fecha_fin_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") + pd.offsets.MonthEnd(1)
                     
@@ -1034,13 +1035,10 @@ try:
                             
                         # 3. Matemática estricta: (Si) / (Si + No) * 100
                         if not df_bloque.empty:
-                            # Limpiamos los datos para que todo quede en mayúsculas y sin espacios
                             respuestas = df_bloque[col_q14].dropna().astype(str).str.strip().str.upper()
                             respuestas = respuestas.str.replace('Í', 'I') # Si dice SÍ, lo pasa a SI
                             
-                            # Filtramos para aislar solo "SI" y "NO"
                             respuestas_validas = respuestas[respuestas.isin(["SI", "NO"])]
-                            
                             total_validas = len(respuestas_validas)
                             total_si = len(respuestas_validas[respuestas_validas == "SI"])
                             
@@ -1053,9 +1051,32 @@ try:
                             fila_6mm[mes_nombre] = "-"
                     else:
                         fila_6mm[mes_nombre] = "-"
-                    
-                    # Rellenamos las demás filas con guiones por ahora
-                    datos_umbrales[2][mes_nombre] = "-"
+                        
+                    # --- LÓGICA NPS MÍNIMO GLOBAL (MENSUAL) ---
+                    # Usamos df_m (Encuestas de Marca) porque ahí está la pregunta de recomendación
+                    if not df_m.empty and MAPA_M['q2'] in df_m.columns:
+                        # 1. Filtramos estrictamente por el mes y año de la columna actual
+                        mascara_mes = (df_m["Anio"] == anio_num) & (df_m["Mes_Num"] == mes_num)
+                        df_mes_nps = df_m[mascara_mes].copy()
+                        
+                        # 2. Filtramos por las marcas seleccionadas en el panel aislado
+                        if marca_roar_sel and "MARCA" in df_mes_nps.columns:
+                            marcas_upper = [m.upper() for m in marca_roar_sel]
+                            df_mes_nps = df_mes_nps[df_mes_nps["MARCA"].astype(str).str.strip().str.upper().isin(marcas_upper)]
+                            
+                        # 3. Calculamos el NPS usando tu función preexistente
+                        if not df_mes_nps.empty:
+                            nps_val, _, _, _, tot_nps = calcular_nps_detallado(df_mes_nps[MAPA_M['q2']])
+                            if tot_nps > 0:
+                                datos_umbrales[2][mes_nombre] = f"{nps_val:.1f}%"
+                            else:
+                                datos_umbrales[2][mes_nombre] = "-"
+                        else:
+                            datos_umbrales[2][mes_nombre] = "-"
+                    else:
+                        datos_umbrales[2][mes_nombre] = "-"
+                        
+                    # Rellenamos las últimas dos filas con guiones a la espera de sus lógicas
                     datos_umbrales[3][mes_nombre] = "-"
                     datos_umbrales[4][mes_nombre] = "-"
                     
@@ -1066,6 +1087,7 @@ try:
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
                     es_contacto = "Contacto Posterior" in str(row["Mes"])
+                    es_nps = "NPS Mínimo Global" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
@@ -1084,12 +1106,22 @@ try:
                                     # Pintamos el umbral de Contacto Posterior (Meta >= 80%)
                                     if es_contacto:
                                         try:
-                                            # Extraemos el número del texto "85.5%"
                                             num_val = float(str(val).replace('%', ''))
                                             if num_val >= 80.0:
-                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;') # VERDE
+                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
                                             else:
-                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;') # ROJO
+                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                        except:
+                                            estilos.append('text-align: center;')
+                                            
+                                    # Pintamos el umbral de NPS Global (Meta >= 88.5%)
+                                    elif es_nps:
+                                        try:
+                                            num_val = float(str(val).replace('%', ''))
+                                            if num_val >= 88.5:
+                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                            else:
+                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
                                         except:
                                             estilos.append('text-align: center;')
                                     else:
