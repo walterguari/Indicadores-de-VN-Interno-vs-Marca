@@ -10,7 +10,6 @@ st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Au
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
-URL_ROAR = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/export?format=csv&gid=877908159"
 
 # --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
