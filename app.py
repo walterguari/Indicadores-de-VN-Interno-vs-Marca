@@ -10,6 +10,7 @@ st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Au
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
+URL_BASE = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=0"
 
 # --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
@@ -110,7 +111,6 @@ def load_data(url, tipo_base):
             df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
             
             # 2. Búsqueda de FECHA a prueba de errores
-            # Busca cualquier columna que contenga la frase, ignorando mayúsculas
             col_fecha = next((c for c in df.columns if 'fecha de ultimo contacto' in c.lower()), None)
             
             if col_fecha:
@@ -120,14 +120,28 @@ def load_data(url, tipo_base):
                 df["Anio"] = pd.NA
                 
             # 3. Búsqueda de MARCA a prueba de errores
-            # Como tienes MARCA en la col F y Marca en la col N, buscamos la que contenga "AP" o "AC"
-            # O simplemente aplicamos el mapeo a la primera que encuentre que se llame "Marca"
             col_marca = next((c for c in df.columns if 'marca' in c.lower() or 'mar ca' in c.lower()), None)
             
             if col_marca:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
-                # Mapeamos AP/AC. Si ya decía Peugeot (por tomar la columna F por error), se conserva intacto.
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
+            else:
+                df["Marca_Normalizada"] = "SIN MARCA"
+
+        # --- NORMALIZACIÓN BASE DE CORREOS ---
+        elif tipo_base == "Base de Correos":
+            col_fecha = next((c for c in df.columns if 'fecha de importación' in c.lower() or 'importacion' in c.lower()), None)
+            if col_fecha:
+                df["Fecha de Importación"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
+                df["Anio"] = df["Fecha de Importación"].dt.year
+                df["Mes_Num"] = df["Fecha de Importación"].dt.month
+            else:
+                df["Anio"] = pd.NA
+                df["Mes_Num"] = pd.NA
+            
+            col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
+            if col_marca:
+                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper()
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
@@ -336,6 +350,7 @@ try:
     df_i = load_data(URL_INTERNA, "Encuestas Internas")
     df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
     df_roar = load_data(URL_MARCA, "Prima de Calidad")
+    df_base = load_data(URL_BASE, "Base de Correos")
     
     if not df_m.empty and not df_i.empty:
         
@@ -1014,7 +1029,6 @@ try:
                 fila_6mm = datos_umbrales[1]
                 
                 # Iteramos sobre los 12 meses para llenar las columnas
-                # Iteramos sobre los 12 meses para llenar las columnas
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
                     fila_cabecera[mes_nombre] = "" 
@@ -1076,8 +1090,54 @@ try:
                     else:
                         datos_umbrales[2][mes_nombre] = "-"
                         
-                    # Rellenamos las últimas dos filas con guiones a la espera de sus lógicas
-                    datos_umbrales[3][mes_nombre] = "-"
+                    # --- LÓGICA TASA DE MAIL VÁLIDO (MENSUAL) ---
+                    col_estado = next((c for c in df_base.columns if 'estado de limpieza' in c.lower()), None)
+                    col_rechazo = next((c for c in df_base.columns if 'razón de rechazo' in c.lower() or 'razon de rechazo' in c.lower()), None)
+                    
+                    if not df_base.empty and col_estado:
+                        # 1. Filtramos estrictamente por el mes y año
+                        mascara_mes_base = (df_base["Anio"] == anio_num) & (df_base["Mes_Num"] == mes_num)
+                        df_mes_base = df_base[mascara_mes_base].copy()
+                        
+                        # 2. Filtramos por marcas
+                        if marca_roar_sel and "Marca_Normalizada" in df_mes_base.columns:
+                            marcas_upper = [m.upper() for m in marca_roar_sel]
+                            df_mes_base = df_mes_base[df_mes_base["Marca_Normalizada"].isin(marcas_upper)]
+                            
+                        # 3. Matemática exacta de válidos vs rechazos computables
+                        if not df_mes_base.empty:
+                            estado_serie = df_mes_base[col_estado].astype(str).str.strip().str.upper().str.replace('Á', 'A')
+                            
+                            cant_validos = (estado_serie == "VALIDO").sum()
+                            
+                            razones_validas_penalizables = [
+                                "NoContactProvided",
+                                "No se proporciono ningun contacto valido",
+                                "Correo electrónico/teléfono ausente;Correo electrónico/teléfono Inválido",
+                                "Invalid Email",
+                                "Mandatory field missing - email; invalid email"
+                            ]
+                            
+                            if col_rechazo:
+                                razon_serie = df_mes_base[col_rechazo].astype(str).str.strip()
+                                mascara_rechazos = (estado_serie.str.contains("NO VALID", na=False)) & (razon_serie.isin(razones_validas_penalizables))
+                                cant_rechazos = mascara_rechazos.sum()
+                            else:
+                                cant_rechazos = 0
+                                
+                            total_divisor = cant_validos + cant_rechazos
+                            
+                            if total_divisor > 0:
+                                tasa_mail = (cant_validos / total_divisor) * 100
+                                datos_umbrales[3][mes_nombre] = f"{tasa_mail:.1f}%"
+                            else:
+                                datos_umbrales[3][mes_nombre] = "-"
+                        else:
+                            datos_umbrales[3][mes_nombre] = "-"
+                    else:
+                        datos_umbrales[3][mes_nombre] = "-"
+                        
+                    # Rellenamos la última fila con guiones a la espera de su lógica
                     datos_umbrales[4][mes_nombre] = "-"
                     
                 df_umbrales = pd.DataFrame(datos_umbrales)
@@ -1088,6 +1148,7 @@ try:
                     es_cabecera = "🔑" in str(row["Mes"])
                     es_contacto = "Contacto Posterior" in str(row["Mes"])
                     es_nps = "NPS Mínimo Global" in str(row["Mes"])
+                    es_mail = "Tasa de Mail Válido" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
@@ -1103,27 +1164,22 @@ try:
                                 if val == "-":
                                     estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
                                 else:
-                                    # Pintamos el umbral de Contacto Posterior (Meta >= 80%)
-                                    if es_contacto:
+                                    if es_contacto or es_mail:
                                         try:
-                                            num_val = float(str(val).replace('%', ''))
-                                            if num_val >= 80.0:
+                                            if float(str(val).replace('%', '')) >= 80.0:
                                                 estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
                                             else:
                                                 estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                        except:
-                                            estilos.append('text-align: center;')
+                                        except: estilos.append('text-align: center;')
                                             
-                                    # Pintamos el umbral de NPS Global (Meta >= 88.5%)
                                     elif es_nps:
                                         try:
-                                            num_val = float(str(val).replace('%', ''))
-                                            if num_val >= 88.5:
+                                            if float(str(val).replace('%', '')) >= 88.5:
                                                 estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
                                             else:
                                                 estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                        except:
-                                            estilos.append('text-align: center;')
+                                        except: estilos.append('text-align: center;')
+                                        
                                     else:
                                         estilos.append('text-align: center;')
                     return estilos
@@ -1136,6 +1192,6 @@ try:
                 
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
-                       
+                        
 except Exception as e:
     st.error(f"Error en la ejecución del Tablero Integrado: {e}")
