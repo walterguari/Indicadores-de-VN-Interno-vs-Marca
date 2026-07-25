@@ -336,7 +336,7 @@ try:
     df_m = load_data(URL_MARCA, "Encuestas de Marca")
     df_i = load_data(URL_INTERNA, "Encuestas Internas")
     df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
-    df_roar = load_data(URL_ROAR, "Prima de Calidad")
+    df_roar = load_data(URL_MARCA, "Prima de Calidad")
     
     if not df_m.empty and not df_i.empty:
         
