@@ -985,32 +985,24 @@ try:
             st.markdown("## 📊 Tablero de Auditoría y Liquidación: Prima de Calidad Venta")
             
             if not df_roar.empty:
-                # --- PARCHE DE SEGURIDAD PARA EL AÑO ---
-                # Si por algún motivo el año no cargó, forzamos la extracción desde cualquier columna de fecha/mes
                 if "Anio" not in df_roar.columns or df_roar["Anio"].isna().all():
                     col_fech = next((c for c in df_roar.columns if 'fech' in str(c).lower() or 'mes' in str(c).lower()), df_roar.columns[0])
                     df_roar["Fecha de ultimo contacto"] = pd.to_datetime(df_roar[col_fech], dayfirst=True, errors='coerce')
                     df_roar["Anio"] = df_roar["Fecha de ultimo contacto"].dt.year
                 
-                # Contenedor desplegable para los filtros
                 with st.expander("⚙️ Filtros de Prima", expanded=True):
                     col_f1, col_f2 = st.columns(2)
-                    
                     with col_f1:
-                        # Selector único para el Año
                         anios_roar = sorted(list(df_roar["Anio"].dropna().unique()), reverse=True)
                         anios_roar_str = [str(int(a)) for a in anios_roar if pd.notna(a)]
                         anio_roar_sel = st.selectbox("Año:", options=anios_roar_str if anios_roar_str else ["2026"], key="sb_roar_anio_aislado")
                     
                     with col_f2:
-                        # Selector múltiple para las Marcas
                         marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["PEUGEOT", "CITROEN"]
                         marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"]
                         marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
-                # --- Resultados y Lógica 6MM ---
                 st.markdown("---")
-                
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
                 datos_umbrales = [
@@ -1018,98 +1010,86 @@ try:
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
                     {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)"},
                     {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)"},
-                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"}
+                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"},
+                    {"Mes": "🎯 INCENTIVOS COMERCIALES"},
+                    {"Mes": "🔹 Recomendación (Q2)"},
+                    {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
+                    {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
+                    {"Mes": "🔹 Q15 Satisfacción del Contacto"},
+                    {"Mes": "💰 SUMA DRIVERS (Unitario)"}
                 ]
                 
-                # Búsqueda ultra segura de la columna (ignora mayúsculas/minúsculas)
+                # Matriz espejo para guardar los tooltips
+                datos_tooltips = [{"Mes": ""} for _ in range(11)]
+                
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
                 anio_num = int(anio_roar_sel) if anio_roar_sel else 2026
                 
-                fila_cabecera = datos_umbrales[0]
-                fila_6mm = datos_umbrales[1]
+                meta_muestra = 0
+                if marca_roar_sel:
+                    marcas_upper = [m.upper() for m in marca_roar_sel]
+                    if "PEUGEOT" in marcas_upper: meta_muestra += 4
+                    if "CITROEN" in marcas_upper: meta_muestra += 3
+                else:
+                    meta_muestra = 7 
                 
-                # Iteramos sobre los 12 meses para llenar las columnas
+                def get_inc(nps_v, q_t):
+                    if nps_v <= 90.49: return 0.0
+                    if q_t == 'q2': return 0.20 if nps_v >= 96 else 0.13
+                    if q_t == 'q8': return 0.14 if nps_v >= 96 else 0.08
+                    if q_t in ['q4', 'q15']: return 0.03 if nps_v >= 96 else 0.02
+                    return 0.0
+
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    fila_cabecera[mes_nombre] = "" 
+                    for r in range(11): datos_umbrales[r][mes_nombre] = "-"
+                    for r in range(11): datos_tooltips[r][mes_nombre] = ""
+                    datos_umbrales[0][mes_nombre] = "" 
+                    datos_umbrales[5][mes_nombre] = ""
                     
-                    # LOGICA 6 MESES MÓVILES EXACTA (Ej: Para Enero = 1 de Agosto al 31 de Enero)
+                    porcentaje_6mm = 0.0
+                    nps_val = 0.0
+                    tasa_mail = 0.0
+                    cant_muestra = 0
+                    
+                    # 1. Contacto 6MM
                     fecha_inicio_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") - pd.DateOffset(months=5)
                     fecha_fin_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") + pd.offsets.MonthEnd(1)
-                    
                     if "Fecha de ultimo contacto" in df_roar.columns and col_q14:
-                        
-                        # 1. Filtramos las encuestas que caen exactamente en esos 6 meses
                         mascara_tiempo = (df_roar["Fecha de ultimo contacto"] >= fecha_inicio_6mm) & (df_roar["Fecha de ultimo contacto"] <= fecha_fin_6mm)
                         df_bloque = df_roar[mascara_tiempo].copy()
-                        
-                        # 2. Filtramos por marcas seleccionadas en el panel de arriba
                         if marca_roar_sel and "Marca_Normalizada" in df_bloque.columns:
                             df_bloque = df_bloque[df_bloque["Marca_Normalizada"].isin(marca_roar_sel)]
-                            
-                        # 3. Matemática estricta: (Si) / (Si + No) * 100
                         if not df_bloque.empty:
-                            respuestas = df_bloque[col_q14].dropna().astype(str).str.strip().str.upper()
-                            respuestas = respuestas.str.replace('Í', 'I') # Si dice SÍ, lo pasa a SI
-                            
+                            respuestas = df_bloque[col_q14].dropna().astype(str).str.strip().str.upper().str.replace('Í', 'I')
                             respuestas_validas = respuestas[respuestas.isin(["SI", "NO"])]
                             total_validas = len(respuestas_validas)
-                            total_si = len(respuestas_validas[respuestas_validas == "SI"])
-                            
                             if total_validas > 0:
-                                porcentaje_6mm = (total_si / total_validas) * 100
-                                fila_6mm[mes_nombre] = f"{porcentaje_6mm:.1f}%"
-                            else:
-                                fila_6mm[mes_nombre] = "-"
-                        else:
-                            fila_6mm[mes_nombre] = "-"
-                    else:
-                        fila_6mm[mes_nombre] = "-"
-                        
-                    # --- LÓGICA NPS MÍNIMO GLOBAL (MENSUAL) ---
-                    # Usamos df_m (Encuestas de Marca) porque ahí está la pregunta de recomendación
+                                porcentaje_6mm = (len(respuestas_validas[respuestas_validas == "SI"]) / total_validas) * 100
+                                datos_umbrales[1][mes_nombre] = f"{porcentaje_6mm:.1f}%"
+                    
+                    # 2. NPS Global
+                    df_mes_nps = pd.DataFrame()
                     if not df_m.empty and MAPA_M['q2'] in df_m.columns:
-                        # 1. Filtramos estrictamente por el mes y año de la columna actual
                         mascara_mes = (df_m["Anio"] == anio_num) & (df_m["Mes_Num"] == mes_num)
                         df_mes_nps = df_m[mascara_mes].copy()
-                        
-                        # 2. Filtramos por las marcas seleccionadas en el panel aislado
                         if marca_roar_sel and "MARCA" in df_mes_nps.columns:
-                            marcas_upper = [m.upper() for m in marca_roar_sel]
                             df_mes_nps = df_mes_nps[df_mes_nps["MARCA"].astype(str).str.strip().str.upper().isin(marcas_upper)]
-                            
-                        # 3. Calculamos el NPS usando tu función preexistente
                         if not df_mes_nps.empty:
                             nps_val, _, _, _, tot_nps = calcular_nps_detallado(df_mes_nps[MAPA_M['q2']])
-                            if tot_nps > 0:
-                                datos_umbrales[2][mes_nombre] = f"{nps_val:.1f}%"
-                            else:
-                                datos_umbrales[2][mes_nombre] = "-"
-                        else:
-                            datos_umbrales[2][mes_nombre] = "-"
-                    else:
-                        datos_umbrales[2][mes_nombre] = "-"
-                        
-                    # --- LÓGICA TASA DE MAIL VÁLIDO (MENSUAL) ---
+                            if tot_nps > 0: datos_umbrales[2][mes_nombre] = f"{nps_val:.1f}%"
+                    
+                    # 3. Mail Válido
                     col_estado = next((c for c in df_base.columns if 'estado de limpieza' in c.lower()), None)
                     col_rechazo = next((c for c in df_base.columns if 'razón de rechazo' in c.lower() or 'razon de rechazo' in c.lower()), None)
-                    
                     if not df_base.empty and col_estado:
-                        # 1. Filtramos estrictamente por el mes y año
                         mascara_mes_base = (df_base["Anio"] == anio_num) & (df_base["Mes_Num"] == mes_num)
                         df_mes_base = df_base[mascara_mes_base].copy()
-                        
-                        # 2. Filtramos por marcas
                         if marca_roar_sel and "Marca_Normalizada" in df_mes_base.columns:
-                            marcas_upper = [m.upper() for m in marca_roar_sel]
                             df_mes_base = df_mes_base[df_mes_base["Marca_Normalizada"].isin(marcas_upper)]
-                            
-                        # 3. Matemática exacta de válidos vs rechazos computables
                         if not df_mes_base.empty:
                             estado_serie = df_mes_base[col_estado].astype(str).str.strip().str.upper().str.replace('Á', 'A')
-                            
                             cant_validos = (estado_serie == "VALIDO").sum()
-                            
                             razones_validas_penalizables = [
                                 "NoContactProvided",
                                 "No se proporciono ningun contacto valido",
@@ -1118,46 +1098,56 @@ try:
                                 "Mandatory field missing - email; invalid email",
                                 "EventDateTooOld"
                             ]
-                            
+                            cant_rechazos = 0
                             if col_rechazo:
                                 razon_serie = df_mes_base[col_rechazo].astype(str).str.strip()
                                 mascara_rechazos = (estado_serie.str.contains("NO VALID", na=False)) & (razon_serie.isin(razones_validas_penalizables))
                                 cant_rechazos = mascara_rechazos.sum()
-                            else:
-                                cant_rechazos = 0
-                                
                             total_divisor = cant_validos + cant_rechazos
-                            
                             if total_divisor > 0:
                                 tasa_mail = (cant_validos / total_divisor) * 100
                                 datos_umbrales[3][mes_nombre] = f"{tasa_mail:.1f}%"
-                            else:
-                                datos_umbrales[3][mes_nombre] = "-"
-                        else:
-                            datos_umbrales[3][mes_nombre] = "-"
-                    else:
-                        datos_umbrales[3][mes_nombre] = "-"
-                        
-                    # --- LÓGICA MUESTRA MÍNIMA (MENSUAL) ---
+                    
+                    # 4. Muestra Mínima
                     if not df_m.empty:
-                        # 1. Filtramos estrictamente por mes y año
                         mascara_mes_muestra = (df_m["Anio"] == anio_num) & (df_m["Mes_Num"] == mes_num)
                         df_mes_muestra = df_m[mascara_mes_muestra].copy()
-                        
-                        # 2. Filtramos por las marcas seleccionadas
                         if marca_roar_sel and "MARCA" in df_mes_muestra.columns:
-                            marcas_upper = [m.upper() for m in marca_roar_sel]
                             df_mes_muestra = df_mes_muestra[df_mes_muestra["MARCA"].astype(str).str.strip().str.upper().isin(marcas_upper)]
-                            
-                        # 3. Contamos la cantidad de filas (encuestas reales del mes)
                         cant_muestra = len(df_mes_muestra)
-                        datos_umbrales[4][mes_nombre] = str(cant_muestra)
-                    else:
-                        datos_umbrales[4][mes_nombre] = "-"
+                        if cant_muestra > 0: datos_umbrales[4][mes_nombre] = str(cant_muestra)
+                        
+                    # 5. Cálculo Condicional de Drivers (Target de Bonus)
+                    llaves_ok = (porcentaje_6mm >= 80.0) and (nps_val >= 88.5) and (tasa_mail >= 80.0) and (cant_muestra >= meta_muestra)
                     
+                    nps_q2 = calcular_nps_detallado(df_mes_nps[MAPA_M['q2']])[0] if not df_mes_nps.empty else 0.0
+                    nps_q8 = calcular_nps_detallado(df_mes_nps[MAPA_M['q8']])[0] if not df_mes_nps.empty else 0.0
+                    nps_q4 = calcular_nps_detallado(df_mes_nps[MAPA_M['q4']])[0] if not df_mes_nps.empty else 0.0
+                    nps_q15 = calcular_nps_detallado(df_mes_nps[MAPA_M['q15']])[0] if not df_mes_nps.empty else 0.0
+                    
+                    inc_q2 = get_inc(nps_q2, 'q2') if llaves_ok else 0.0
+                    inc_q8 = get_inc(nps_q8, 'q8') if llaves_ok else 0.0
+                    inc_q4 = get_inc(nps_q4, 'q4') if llaves_ok else 0.0
+                    inc_q15 = get_inc(nps_q15, 'q15') if llaves_ok else 0.0
+                    inc_tot = inc_q2 + inc_q8 + inc_q4 + inc_q15
+                    
+                    # Escritura de resultados y tooltips
+                    datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
+                    datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
+                    datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
+                    datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
+                    datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
+                    
+                    tt_msg = "✅ Llaves de Acceso: CUMPLIDAS" if llaves_ok else "🚨 Llaves de Acceso: BLOQUEADO (0%)"
+                    datos_tooltips[6][mes_nombre] = f"NPS Obtenido: {nps_q2:.1f}% | {tt_msg}"
+                    datos_tooltips[7][mes_nombre] = f"NPS Obtenido: {nps_q8:.1f}% | {tt_msg}"
+                    datos_tooltips[8][mes_nombre] = f"NPS Obtenido: {nps_q4:.1f}% | {tt_msg}"
+                    datos_tooltips[9][mes_nombre] = f"NPS Obtenido: {nps_q15:.1f}% | {tt_msg}"
+                    datos_tooltips[10][mes_nombre] = tt_msg
+
                 df_umbrales = pd.DataFrame(datos_umbrales)
+                df_tooltips = pd.DataFrame(datos_tooltips)
                 
-                # --- Lógica visual (Colores Verde/Rojo) ---
                 def estilar_filas_prima(row):
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
@@ -1165,63 +1155,53 @@ try:
                     es_nps = "NPS Mínimo Global" in str(row["Mes"])
                     es_mail = "Tasa de Mail Válido" in str(row["Mes"])
                     es_muestra = "Muestra Mínima" in str(row["Mes"])
-                    
-                    # Definimos la meta dinámica para la muestra según el filtro
-                    meta_muestra = 0
-                    if marca_roar_sel:
-                        marcas_upper = [m.upper() for m in marca_roar_sel]
-                        if "PEUGEOT" in marcas_upper: meta_muestra += 4
-                        if "CITROEN" in marcas_upper: meta_muestra += 3
-                    else:
-                        meta_muestra = 7 # Por defecto si no hay filtro activo
+                    es_incentivo_cabecera = "🎯" in str(row["Mes"])
+                    es_driver = "🔹" in str(row["Mes"])
+                    es_suma = "💰" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
-                            if es_cabecera:
-                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd;')
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif es_driver:
+                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
+                            elif es_suma:
+                                estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
                             else:
                                 estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
                         else:
-                            if es_cabecera:
-                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd;')
+                            val = row[col]
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif val == "-":
+                                estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
                             else:
-                                val = row[col]
-                                if val == "-":
-                                    estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
+                                if es_contacto or es_mail:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 80.0: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_nps:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 88.5: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_muestra:
+                                    try:
+                                        if int(val) >= meta_muestra: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_driver:
+                                    if val == "0.00%": estilos.append('color: #999; text-align: center;')
+                                    else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                elif es_suma:
+                                    estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
                                 else:
-                                    if es_contacto or es_mail:
-                                        try:
-                                            if float(str(val).replace('%', '')) >= 80.0:
-                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                            else:
-                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                        except: estilos.append('text-align: center;')
-                                            
-                                    elif es_nps:
-                                        try:
-                                            if float(str(val).replace('%', '')) >= 88.5:
-                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                            else:
-                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                        except: estilos.append('text-align: center;')
-                                        
-                                    elif es_muestra:
-                                        try:
-                                            if int(val) >= meta_muestra:
-                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                            else:
-                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                        except: estilos.append('text-align: center;')
-                                        
-                                    else:
-                                        estilos.append('text-align: center;')
-                    return estilos
+                                    estilos.append('text-align: center;')
                     return estilos
 
-                # Aplicamos el estilo al DataFrame
-                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
-                
-                # Ocultamos el índice numérico
+                # Aplicamos estilo e inyectamos el DataFrame paralelo como tooltips
+                df_estilizado = df_umbrales.style.set_tooltips(df_tooltips).apply(estilar_filas_prima, axis=1)
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
             else:
