@@ -1138,8 +1138,22 @@ try:
                     else:
                         datos_umbrales[3][mes_nombre] = "-"
                         
-                    # Rellenamos la última fila con guiones a la espera de su lógica
-                    datos_umbrales[4][mes_nombre] = "-"
+                    # --- LÓGICA MUESTRA MÍNIMA (MENSUAL) ---
+                    if not df_m.empty:
+                        # 1. Filtramos estrictamente por mes y año
+                        mascara_mes_muestra = (df_m["Anio"] == anio_num) & (df_m["Mes_Num"] == mes_num)
+                        df_mes_muestra = df_m[mascara_mes_muestra].copy()
+                        
+                        # 2. Filtramos por las marcas seleccionadas
+                        if marca_roar_sel and "MARCA" in df_mes_muestra.columns:
+                            marcas_upper = [m.upper() for m in marca_roar_sel]
+                            df_mes_muestra = df_mes_muestra[df_mes_muestra["MARCA"].astype(str).str.strip().str.upper().isin(marcas_upper)]
+                            
+                        # 3. Contamos la cantidad de filas (encuestas reales del mes)
+                        cant_muestra = len(df_mes_muestra)
+                        datos_umbrales[4][mes_nombre] = str(cant_muestra)
+                    else:
+                        datos_umbrales[4][mes_nombre] = "-"
                     
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
@@ -1150,6 +1164,16 @@ try:
                     es_contacto = "Contacto Posterior" in str(row["Mes"])
                     es_nps = "NPS Mínimo Global" in str(row["Mes"])
                     es_mail = "Tasa de Mail Válido" in str(row["Mes"])
+                    es_muestra = "Muestra Mínima" in str(row["Mes"])
+                    
+                    # Definimos la meta dinámica para la muestra según el filtro
+                    meta_muestra = 0
+                    if marca_roar_sel:
+                        marcas_upper = [m.upper() for m in marca_roar_sel]
+                        if "PEUGEOT" in marcas_upper: meta_muestra += 4
+                        if "CITROEN" in marcas_upper: meta_muestra += 3
+                    else:
+                        meta_muestra = 7 # Por defecto si no hay filtro activo
                     
                     for col in row.index:
                         if col == "Mes":
@@ -1181,8 +1205,17 @@ try:
                                                 estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
                                         except: estilos.append('text-align: center;')
                                         
+                                    elif es_muestra:
+                                        try:
+                                            if int(val) >= meta_muestra:
+                                                estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                            else:
+                                                estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                        except: estilos.append('text-align: center;')
+                                        
                                     else:
                                         estilos.append('text-align: center;')
+                    return estilos
                     return estilos
 
                 # Aplicamos el estilo al DataFrame
