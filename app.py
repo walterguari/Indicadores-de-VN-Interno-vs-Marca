@@ -1007,56 +1007,58 @@ try:
                     {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"}
                 ]
                 
-                # BÚSQUEDA CORREGIDA: Busca estrictamente Q14 o "Contactado" (y se asegura de no agarrar "Fecha de ultimo contacto")
-                col_q14 = next((c for c in df_roar.columns if 'q14' in str(c).lower() or ('contactado' in str(c).lower() and 'fecha' not in str(c).lower())), None)
+                # Búsqueda ultra segura de la columna (ignora mayúsculas/minúsculas)
+                col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
                 anio_num = int(anio_roar_sel) if anio_roar_sel else 2026
                 
                 fila_cabecera = datos_umbrales[0]
                 fila_6mm = datos_umbrales[1]
-                fila_nps = datos_umbrales[2]
-                fila_mail = datos_umbrales[3]
-                fila_muestra = datos_umbrales[4]
                 
                 # Iteramos sobre los 12 meses para llenar las columnas
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
                     fila_cabecera[mes_nombre] = "" 
                     
-                    # LOGICA 6 MESES MÓVILES EXACTA (Ej: Para Enero = 1 de Agosto al 31 de Enero)
+                    # LOGICA 6 MESES MÓVILES (Ej: Para Enero = 1 de Agosto al 31 de Enero)
                     fecha_inicio_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") - pd.DateOffset(months=5)
                     fecha_fin_6mm = pd.to_datetime(f"{anio_num}-{mes_num}-01") + pd.offsets.MonthEnd(1)
                     
                     if "Fecha de ultimo contacto" in df_roar.columns and col_q14:
-                        # 1. Filtramos por el bloque de 6 meses
+                        
+                        # 1. Filtramos las encuestas que caen exactamente en esos 6 meses
                         mascara_tiempo = (df_roar["Fecha de ultimo contacto"] >= fecha_inicio_6mm) & (df_roar["Fecha de ultimo contacto"] <= fecha_fin_6mm)
-                        df_bloque_6mm = df_roar[mascara_tiempo].copy()
+                        df_bloque = df_roar[mascara_tiempo].copy()
                         
-                        # 2. Filtramos por las marcas seleccionadas (independiente de los filtros globales)
-                        if marca_roar_sel and "Marca_Normalizada" in df_bloque_6mm.columns:
-                            df_bloque_6mm = df_bloque_6mm[df_bloque_6mm["Marca_Normalizada"].isin(marca_roar_sel)]
+                        # 2. Filtramos por marcas seleccionadas en el panel de arriba
+                        if marca_roar_sel and "Marca_Normalizada" in df_bloque.columns:
+                            df_bloque = df_bloque[df_bloque["Marca_Normalizada"].isin(marca_roar_sel)]
                             
-                        # 3. Matemática: (SI) / (SI + NO) * 100
-                        respuestas = df_bloque_6mm[col_q14].dropna().astype(str).str.strip().str.upper()
-                        
-                        # Atrapa cualquier variación de "Si" y "No"
-                        es_si = respuestas.str.contains(r'^(Si|SÍ|S)', regex=True)
-                        es_no = respuestas.str.contains(r'^(No|N)', regex=True)
-                        
-                        total_validas = (es_si | es_no).sum()
-                        total_si = es_si.sum()
-                        
-                        if total_validas > 0:
-                            porcentaje_6mm = (total_si / total_validas) * 100
-                            fila_6mm[mes_nombre] = f"{porcentaje_6mm:.1f}%"
+                        # 3. Matemática estricta: (Si) / (Si + No) * 100
+                        if not df_bloque.empty:
+                            # Limpiamos los datos para que todo quede en mayúsculas y sin espacios
+                            respuestas = df_bloque[col_q14].dropna().astype(str).str.strip().str.upper()
+                            respuestas = respuestas.str.replace('Í', 'I') # Si dice SÍ, lo pasa a SI
+                            
+                            # Filtramos para aislar solo "SI" y "NO"
+                            respuestas_validas = respuestas[respuestas.isin(["SI", "NO"])]
+                            
+                            total_validas = len(respuestas_validas)
+                            total_si = len(respuestas_validas[respuestas_validas == "SI"])
+                            
+                            if total_validas > 0:
+                                porcentaje_6mm = (total_si / total_validas) * 100
+                                fila_6mm[mes_nombre] = f"{porcentaje_6mm:.1f}%"
+                            else:
+                                fila_6mm[mes_nombre] = "-"
                         else:
                             fila_6mm[mes_nombre] = "-"
                     else:
                         fila_6mm[mes_nombre] = "-"
                     
                     # Rellenamos las demás filas con guiones por ahora
-                    fila_nps[mes_nombre] = "-"
-                    fila_mail[mes_nombre] = "-"
-                    fila_muestra[mes_nombre] = "-"
+                    datos_umbrales[2][mes_nombre] = "-"
+                    datos_umbrales[3][mes_nombre] = "-"
+                    datos_umbrales[4][mes_nombre] = "-"
                     
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
