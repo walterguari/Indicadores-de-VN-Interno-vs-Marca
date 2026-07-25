@@ -1116,7 +1116,7 @@ try:
                                 "Correo electrónico/teléfono ausente;Correo electrónico/teléfono Inválido",
                                 "Invalid Email",
                                 "Mandatory field missing - email; invalid email"
-                                "EventDateTooOld"
+                                "EventDateTooOld",
                             ]
                             
                             if col_rechazo:
