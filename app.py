@@ -1200,8 +1200,8 @@ try:
                                     estilos.append('text-align: center;')
                     return estilos
 
-                # Aplicamos estilo e inyectamos el DataFrame paralelo como tooltips
-                df_estilizado = df_umbrales.style.set_tooltips(df_tooltips).apply(estilar_filas_prima, axis=1)
+                # Aplicamos estilo (sin tooltips para evitar conflicto HTML con Streamlit)
+                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
             else:
