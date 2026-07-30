@@ -11,6 +11,7 @@ URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5u
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
 URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
 URL_BASE = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=0"
+URL_DUV = "https://docs.google.com/spreadsheets/d/1-ziHRIEWQZUxFUBGqoweX6PvY6sDgoaXGcueSUd9370/edit#gid=1482583153"
 
 # --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
@@ -137,6 +138,24 @@ def load_data(url, tipo_base):
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             if col_marca:
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper()
+            else:
+                df["Marca_Normalizada"] = "SIN MARCA"
+                
+        # --- NORMALIZACIÓN ANALISIS DUV WG ---
+        elif tipo_base == "Análisis DUV":
+            df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
+            col_pat = next((c for c in df.columns if 'patentamiento' in c.lower()), "Fecha de Patentamiento")
+            col_ho = next((c for c in df.columns if 'fecha de h.o' in c.lower() or 'h.o' in c.lower()), "FECHA DE H.O.")
+            col_marca = next((c for c in df.columns if 'marca' in c.lower()), "marca")
+            
+            df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat], dayfirst=True, errors='coerce')
+            df["FECHA DE H.O."] = pd.to_datetime(df[col_ho], dayfirst=True, errors='coerce')
+            df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
+            df["Mes_Patentamiento"] = df["Fecha de Patentamiento"].dt.month
+            
+            if col_marca in df.columns:
+                mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
+                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
@@ -346,6 +365,7 @@ try:
     df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
     df_roar = load_data(URL_MARCA, "Prima de Calidad")
     df_base = load_data(URL_BASE, "Base de Correos")
+    df_duv = load_data(URL_DUV, "Análisis DUV")
     
     if not df_m.empty and not df_i.empty:
         
@@ -1060,6 +1080,7 @@ try:
                     {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
                     {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
                     {"Mes": "🔹 Q15 Satisfacción del Contacto"},
+                    {"Mes": "Cant. Patentadas y Entregadas"},
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"}
                 ]
                 
@@ -1083,7 +1104,7 @@ try:
 
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    for r in range(11): datos_umbrales[r][mes_nombre] = "-"
+                    for r in range(12): datos_umbrales[r][mes_nombre] = "-"
                     datos_umbrales[0][mes_nombre] = "" 
                     datos_umbrales[5][mes_nombre] = ""
                     
@@ -1170,12 +1191,32 @@ try:
                     inc_q15 = get_inc(nps_q15, 'q15') if llaves_ok else 0.0
                     inc_tot = inc_q2 + inc_q8 + inc_q4 + inc_q15
                     
+                    # 6. Cant. Patentadas y Entregadas (Hoja DUV)
+                    cant_pat_entregados = 0
+                    if not df_duv.empty:
+                        df_mes_duv = df_duv[(df_duv["Anio_Patentamiento"] == anio_num) & (df_duv["Mes_Patentamiento"] == mes_num)].copy()
+                        if marca_roar_sel and "Marca_Normalizada" in df_mes_duv.columns:
+                            df_mes_duv = df_mes_duv[df_mes_duv["Marca_Normalizada"].isin(marcas_upper)]
+                        if not df_mes_duv.empty:
+                            if mes_num == 12:
+                                mes_sig = 1
+                                anio_sig = anio_num + 1
+                            else:
+                                mes_sig = mes_num + 1
+                                anio_sig = anio_num
+                            
+                            fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
+                            
+                            mascara_ho = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
+                            cant_pat_entregados = int(mascara_ho.sum())
+                    
                     # Escritura de resultados
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
-                    datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
+                    datos_umbrales[10][mes_nombre] = str(cant_pat_entregados) if cant_pat_entregados > 0 else "-"
+                    datos_umbrales[11][mes_nombre] = f"{inc_tot:.2f}%"
 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
@@ -1188,13 +1229,14 @@ try:
                     es_muestra = "Muestra Mínima" in str(row["Mes"])
                     es_incentivo_cabecera = "🎯" in str(row["Mes"])
                     es_driver = "🔹" in str(row["Mes"])
+                    es_cant_pat = "Cant. Patentadas" in str(row["Mes"])
                     es_suma = "💰" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
                             if es_cabecera or es_incentivo_cabecera:
                                 estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
-                            elif es_driver:
+                            elif es_driver or es_cant_pat:
                                 estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
                             elif es_suma:
                                 estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
@@ -1225,6 +1267,8 @@ try:
                                 elif es_driver:
                                     if val == "0.00%": estilos.append('color: #999; text-align: center;')
                                     else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                elif es_cant_pat:
+                                    estilos.append('color: #333; font-weight: bold; text-align: center;')
                                 elif es_suma:
                                     estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
                                 else:
