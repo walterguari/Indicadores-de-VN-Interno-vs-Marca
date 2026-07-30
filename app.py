@@ -143,16 +143,18 @@ def load_data(url, tipo_base):
                 
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
-            # Limpiar saltos de línea (\n, \r) y espacios dobles en los nombres de las columnas
+            # Limpiamos saltos de línea y espacios múltiples en los encabezados
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
             
+            # Búsqueda flexible de columnas clave (ignora mayúsculas/minúsculas y saltos de línea)
             col_pat = next((c for c in df.columns if 'patenta' in c.lower()), None)
-            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower()), None)
+            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower() or 'entrega' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
             if col_pat and col_ho:
-                df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat], dayfirst=True, errors='coerce')
-                df["FECHA DE H.O."] = pd.to_datetime(df[col_ho], dayfirst=True, errors='coerce')
+                # Convertimos a string primero para evitar errores con celdas vacías o numéricas
+                df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat].astype(str).str.strip(), dayfirst=True, errors='coerce')
+                df["FECHA DE H.O."] = pd.to_datetime(df[col_ho].astype(str).str.strip(), dayfirst=True, errors='coerce')
                 df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
                 df["Mes_Patentamiento"] = df["Fecha de Patentamiento"].dt.month
             else:
@@ -1199,10 +1201,12 @@ try:
                     
                     # 6. Cant. Patentadas y Entregadas (Hoja DUV)
                     cant_pat_entregados = 0
-                    if not df_duv.empty:
+                    if not df_duv.empty and "Anio_Patentamiento" in df_duv.columns:
                         df_mes_duv = df_duv[(df_duv["Anio_Patentamiento"] == anio_num) & (df_duv["Mes_Patentamiento"] == mes_num)].copy()
+                        
                         if marca_roar_sel and "Marca_Normalizada" in df_mes_duv.columns:
                             df_mes_duv = df_mes_duv[df_mes_duv["Marca_Normalizada"].isin(marcas_upper)]
+                            
                         if not df_mes_duv.empty:
                             if mes_num == 12:
                                 mes_sig = 1
@@ -1211,12 +1215,13 @@ try:
                                 mes_sig = mes_num + 1
                                 anio_sig = anio_num
                             
+                            # Fecha límite de Hand Over: día 24 a las 23:59:59 del mes siguiente
                             fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
                             
                             mascara_ho = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
                             cant_pat_entregados = int(mascara_ho.sum())
                     
-                    # Escritura de resultados
+                    # Escritura de resultados en el índice correcto
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
