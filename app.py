@@ -144,16 +144,20 @@ def load_data(url, tipo_base):
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
             df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-            col_pat = next((c for c in df.columns if 'patentamiento' in c.lower()), "Fecha de Patentamiento")
-            col_ho = next((c for c in df.columns if 'fecha de h.o' in c.lower() or 'h.o' in c.lower()), "FECHA DE H.O.")
-            col_marca = next((c for c in df.columns if 'marca' in c.lower()), "marca")
+            col_pat = next((c for c in df.columns if 'patentamiento' in c.lower()), None)
+            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower() or 'entrega' in c.lower()), None)
+            col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
-            df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat], dayfirst=True, errors='coerce')
-            df["FECHA DE H.O."] = pd.to_datetime(df[col_ho], dayfirst=True, errors='coerce')
-            df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
-            df["Mes_Patentamiento"] = df["Fecha de Patentamiento"].dt.month
+            if col_pat and col_ho:
+                df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat], dayfirst=True, errors='coerce')
+                df["FECHA DE H.O."] = pd.to_datetime(df[col_ho], dayfirst=True, errors='coerce')
+                df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
+                df["Mes_Patentamiento"] = df["Fecha de Patentamiento"].dt.month
+            else:
+                df["Anio_Patentamiento"] = pd.NA
+                df["Mes_Patentamiento"] = pd.NA
             
-            if col_marca in df.columns:
+            if col_marca and col_marca in df.columns:
                 mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
             else:
@@ -1080,8 +1084,8 @@ try:
                     {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
                     {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
                     {"Mes": "🔹 Q15 Satisfacción del Contacto"},
-                    {"Mes": "Cant. Patentadas y Entregadas"},
-                    {"Mes": "💰 SUMA DRIVERS (Unitario)"}
+                    {"Mes": "💰 SUMA DRIVERS (Unitario)"},
+                    {"Mes": "Cant. Patentadas y Entregadas"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1215,8 +1219,8 @@ try:
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
-                    datos_umbrales[10][mes_nombre] = str(cant_pat_entregados) if cant_pat_entregados > 0 else "-"
-                    datos_umbrales[11][mes_nombre] = f"{inc_tot:.2f}%"
+                    datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
+                    datos_umbrales[11][mes_nombre] = str(cant_pat_entregados) if cant_pat_entregados > 0 else "-"
 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
