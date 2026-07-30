@@ -142,17 +142,18 @@ def load_data(url, tipo_base):
                 df["Marca_Normalizada"] = "SIN MARCA"
                 
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
+        # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
-            # Limpiamos saltos de línea y espacios múltiples en los encabezados
+            # Limpiamos saltos de línea (\r, \n) y múltiples espacios en los nombres de columnas
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
             
-            # Búsqueda flexible de columnas clave (ignora mayúsculas/minúsculas y saltos de línea)
+            # Buscamos de forma parcial para detectar las columnas Q y U sin importar mayúsculas o espacios extra
             col_pat = next((c for c in df.columns if 'patenta' in c.lower()), None)
             col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower() or 'entrega' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
             if col_pat and col_ho:
-                # Convertimos a string primero para evitar errores con celdas vacías o numéricas
+                # Convertimos limpiando strings vacíos para que las fechas en formato dd/mm/yyyy se lean perfectas
                 df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat].astype(str).str.strip(), dayfirst=True, errors='coerce')
                 df["FECHA DE H.O."] = pd.to_datetime(df[col_ho].astype(str).str.strip(), dayfirst=True, errors='coerce')
                 df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
@@ -374,6 +375,7 @@ try:
     df_roar = load_data(URL_MARCA, "Prima de Calidad")
     df_base = load_data(URL_BASE, "Base de Correos")
     df_duv = load_data(URL_DUV, "Análisis DUV")
+    st.write(df_duv[["Fecha de Patentamiento", "FECHA DE H.O."]].dropna().head(3))
     
     if not df_m.empty and not df_i.empty:
         
@@ -1215,7 +1217,7 @@ try:
                                 mes_sig = mes_num + 1
                                 anio_sig = anio_num
                             
-                            # Fecha límite de Hand Over: día 24 a las 23:59:59 del mes siguiente
+                            # Límite de Hand Over: hasta el día 24 inclusive del mes calendario siguiente
                             fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
                             
                             mascara_ho = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
@@ -1228,7 +1230,7 @@ try:
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
                     datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
                     datos_umbrales[11][mes_nombre] = str(cant_pat_entregados) if cant_pat_entregados > 0 else "-"
-
+                
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
                 def estilar_filas_prima(row):
