@@ -143,9 +143,11 @@ def load_data(url, tipo_base):
                 
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
-            df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
-            col_pat = next((c for c in df.columns if 'patentamiento' in c.lower()), None)
-            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower() or 'entrega' in c.lower()), None)
+            # Limpiar saltos de línea (\n, \r) y espacios dobles en los nombres de las columnas
+            df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
+            
+            col_pat = next((c for c in df.columns if 'patenta' in c.lower()), None)
+            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
             if col_pat and col_ho:
