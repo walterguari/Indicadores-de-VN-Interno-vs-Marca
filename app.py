@@ -142,7 +142,6 @@ def load_data(url, tipo_base):
                 df["Marca_Normalizada"] = "SIN MARCA"
                 
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
-        # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
             # Limpiamos saltos de línea (\r, \n) y múltiples espacios en los nombres de columnas
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
@@ -375,7 +374,8 @@ try:
     df_roar = load_data(URL_MARCA, "Prima de Calidad")
     df_base = load_data(URL_BASE, "Base de Correos")
     df_duv = load_data(URL_DUV, "Análisis DUV")
-    st.write(df_duv[["Fecha de Patentamiento", "FECHA DE H.O."]].dropna().head(3))
+    
+    # ¡LISTO! La línea de debug que mostraba la tablita fue eliminada de aquí.
     
     if not df_m.empty and not df_i.empty:
         
