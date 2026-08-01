@@ -1081,6 +1081,7 @@ try:
                 st.markdown("---")
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
+                # AGREGAMOS LA NUEVA FILA A LA MATRIZ (Posición 12)
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1093,7 +1094,8 @@ try:
                     {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
                     {"Mes": "🔹 Q15 Satisfacción del Contacto"},
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"},
-                    {"Mes": "Cant. Patentadas y Entregadas"}
+                    {"Mes": "✅ Cant. Patentadas y Entregadas"},
+                    {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1116,7 +1118,7 @@ try:
 
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    for r in range(12): datos_umbrales[r][mes_nombre] = "-"
+                    for r in range(13): datos_umbrales[r][mes_nombre] = "-"
                     datos_umbrales[0][mes_nombre] = "" 
                     datos_umbrales[5][mes_nombre] = ""
                     
@@ -1203,8 +1205,11 @@ try:
                     inc_q15 = get_inc(nps_q15, 'q15') if llaves_ok else 0.0
                     inc_tot = inc_q2 + inc_q8 + inc_q4 + inc_q15
                     
-                    # 6. Cant. Patentadas y Entregadas (Hoja DUV)
+                    # 6. Cant. Patentadas y Entregadas (Hoja DUV) Y FUERA DE PLAZO
                     cant_pat_entregados = 0
+                    cant_vacios = 0
+                    cant_fuera_tiempo = 0
+                    
                     if not df_duv.empty and "Anio_Patentamiento" in df_duv.columns:
                         df_mes_duv = df_duv[(df_duv["Anio_Patentamiento"] == anio_num) & (df_duv["Mes_Patentamiento"] == mes_num)].copy()
                         
@@ -1222,8 +1227,12 @@ try:
                             # Límite de Hand Over: hasta el día 24 inclusive del mes calendario siguiente
                             fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
                             
-                            mascara_ho = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
-                            cant_pat_entregados = int(mascara_ho.sum())
+                            # Cuentas Exactas
+                            mascara_ok = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
+                            cant_pat_entregados = int(mascara_ok.sum())
+                            
+                            cant_vacios = int(df_mes_duv["FECHA DE H.O."].isna().sum())
+                            cant_fuera_tiempo = int((df_mes_duv["FECHA DE H.O."] > fecha_limite_ho).sum())
                     
                     # Escritura de resultados en el índice correcto
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
@@ -1231,10 +1240,20 @@ try:
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
                     datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
+                    
+                    # Escribimos los OK
                     datos_umbrales[11][mes_nombre] = str(cant_pat_entregados)
+                    
+                    # Escribimos los Pendientes/Tarde de forma súper visual
+                    total_fuera = cant_vacios + cant_fuera_tiempo
+                    if total_fuera > 0:
+                        datos_umbrales[12][mes_nombre] = f"{total_fuera}  (❌ {cant_fuera_tiempo} tarde | 🔲 {cant_vacios} vacíos)"
+                    else:
+                        datos_umbrales[12][mes_nombre] = "0"
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
+                # Estilizamos todo para que sea visual
                 def estilar_filas_prima(row):
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
@@ -1245,13 +1264,14 @@ try:
                     es_incentivo_cabecera = "🎯" in str(row["Mes"])
                     es_driver = "🔹" in str(row["Mes"])
                     es_cant_pat = "Cant. Patentadas" in str(row["Mes"])
+                    es_fuera_plazo = "Fuera de Plazo" in str(row["Mes"])
                     es_suma = "💰" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
                             if es_cabecera or es_incentivo_cabecera:
                                 estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
-                            elif es_driver or es_cant_pat:
+                            elif es_driver or es_cant_pat or es_fuera_plazo:
                                 estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
                             elif es_suma:
                                 estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
@@ -1284,6 +1304,11 @@ try:
                                     else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
                                 elif es_cant_pat:
                                     estilos.append('color: #333; font-weight: bold; text-align: center;')
+                                elif es_fuera_plazo:
+                                    if str(val) == "0":
+                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;') # Verde si hay 0 pendientes
+                                    else:
+                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;') # Rojo con info si fallaron
                                 elif es_suma:
                                     estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
                                 else:
