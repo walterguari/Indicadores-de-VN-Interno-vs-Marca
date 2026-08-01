@@ -146,13 +146,12 @@ def load_data(url, tipo_base):
             # Limpiamos saltos de línea (\r, \n) y múltiples espacios en los nombres de columnas
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
             
-            # Buscamos de forma parcial para detectar las columnas Q y U sin importar mayúsculas o espacios extra
+            # BÚSQUEDA ESTRICTA: Evitamos que confunda "FECHA DE H.O." con otras fechas
             col_pat = next((c for c in df.columns if 'patenta' in c.lower()), None)
-            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower() or 'entrega' in c.lower()), None)
+            col_ho = next((c for c in df.columns if 'h.o' in c.lower()), next((c for c in df.columns if 'hand over' in c.lower()), None))
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
             if col_pat and col_ho:
-                # Convertimos limpiando strings vacíos para que las fechas en formato dd/mm/yyyy se lean perfectas
                 df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat].astype(str).str.strip(), dayfirst=True, errors='coerce')
                 df["FECHA DE H.O."] = pd.to_datetime(df[col_ho].astype(str).str.strip(), dayfirst=True, errors='coerce')
                 df["Anio_Patentamiento"] = df["Fecha de Patentamiento"].dt.year
@@ -162,8 +161,10 @@ def load_data(url, tipo_base):
                 df["Mes_Patentamiento"] = pd.NA
             
             if col_marca and col_marca in df.columns:
-                mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
-                df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
+                # Normalizamos eliminando acentos/diéresis para que haga match perfecto con los filtros del portal
+                marca_str = df[col_marca].astype(str).str.strip().str.upper()
+                df["Marca_Normalizada"] = np.where(marca_str.str.contains("PEUGEOT", na=False), "PEUGEOT",
+                                          np.where(marca_str.str.contains("CITRO", na=False), "CITROEN", "OTRA"))
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
@@ -1229,7 +1230,7 @@ try:
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
                     datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
-                    datos_umbrales[11][mes_nombre] = str(cant_pat_entregados) if cant_pat_entregados > 0 else "-"
+                    datos_umbrales[11][mes_nombre] = str(cant_pat_entregados)
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
