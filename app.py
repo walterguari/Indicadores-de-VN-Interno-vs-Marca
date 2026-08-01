@@ -147,9 +147,10 @@ def load_data(url, tipo_base):
             # Limpiamos saltos de línea (\r, \n) y múltiples espacios en los nombres de columnas
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
             
-            # BÚSQUEDA ESTRICTA: Evitamos que confunda "FECHA DE H.O." con otras fechas
-            col_pat = next((c for c in df.columns if 'patenta' in c.lower()), None)
-            col_ho = next((c for c in df.columns if 'h.o' in c.lower()), next((c for c in df.columns if 'hand over' in c.lower()), None))
+            # BÚSQUEDA ESTRICTA CORREGIDA
+            # Exigimos que tenga "fecha" Y "patenta" para que NO se confunda con la columna de Observaciones
+            col_pat = next((c for c in df.columns if 'fecha' in c.lower() and 'patenta' in c.lower()), None)
+            col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
             if col_pat and col_ho:
@@ -162,7 +163,6 @@ def load_data(url, tipo_base):
                 df["Mes_Patentamiento"] = pd.NA
             
             if col_marca and col_marca in df.columns:
-                # Normalizamos eliminando acentos/diéresis para que haga match perfecto con los filtros del portal
                 marca_str = df[col_marca].astype(str).str.strip().str.upper()
                 df["Marca_Normalizada"] = np.where(marca_str.str.contains("PEUGEOT", na=False), "PEUGEOT",
                                           np.where(marca_str.str.contains("CITRO", na=False), "CITROEN", "OTRA"))
