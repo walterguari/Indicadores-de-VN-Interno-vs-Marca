@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import math
+import urllib.parse
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Autociel", layout="wide")
@@ -84,7 +85,7 @@ def load_data(url, tipo_base):
             else:
                 df["Categoria_Comentario"] = "SIN COMENTARIO"
                 
-        # --- NORMALIZACIÓN GESTIÓN DE QUEJAS (Filtro Estricto 2025+) ---
+        # --- NORMALIZACIÓN GESTIÓN DE QUEJAS ---
         elif tipo_base == "Gestión de Quejas":
             col_fecha = next((c for c in df.columns if 'fech' in c.lower()), "Fecha de Gestión")
             col_categorizacion = next((c for c in df.columns if 'categorizac' in c.lower() or 'categorí' in c.lower()), "Categorizacion del Reclamo")
@@ -144,14 +145,22 @@ def load_data(url, tipo_base):
                 
         # --- NORMALIZACIÓN ANALISIS DUV WG ---
         elif tipo_base == "Análisis DUV":
-            # Limpiamos saltos de línea (\r, \n) y múltiples espacios en los nombres de columnas
             df.columns = df.columns.astype(str).str.replace(r'[\r\n]+', ' ', regex=True).str.replace(r'\s+', ' ', regex=True).str.strip()
             
-            # BÚSQUEDA ESTRICTA CORREGIDA
-            # Exigimos que tenga "fecha" Y "patenta" para que NO se confunda con la columna de Observaciones
             col_pat = next((c for c in df.columns if 'fecha' in c.lower() and 'patenta' in c.lower()), None)
             col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
+            
+            # --- EXTRACCIÓN DE PRECIO FACTURADO PARA MATEMÁTICA ---
+            col_precio = next((c for c in df.columns if 'precio facturad' in c.lower() or 'precio' in c.lower()), None)
+            if col_precio:
+                # Se eliminan los símbolos $ y cualquier letra, dejando solo números, puntos y comas
+                precio_str = df[col_precio].astype(str).str.replace(r'[^\d,.-]', '', regex=True)
+                # Conversión de formato latino (1.500.000,50 -> 1500000.50)
+                precio_str = precio_str.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df["Precio Facturado"] = pd.to_numeric(precio_str, errors='coerce').fillna(0.0)
+            else:
+                df["Precio Facturado"] = 0.0
             
             if col_pat and col_ho:
                 df["Fecha de Patentamiento"] = pd.to_datetime(df[col_pat].astype(str).str.strip(), dayfirst=True, errors='coerce')
@@ -376,8 +385,6 @@ try:
     df_roar = load_data(URL_MARCA, "Prima de Calidad")
     df_base = load_data(URL_BASE, "Base de Correos")
     df_duv = load_data(URL_DUV, "Análisis DUV")
-    
-    # ¡LISTO! La línea de debug que mostraba la tablita fue eliminada de aquí.
     
     if not df_m.empty and not df_i.empty:
         
@@ -1081,7 +1088,6 @@ try:
                 st.markdown("---")
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
-                # AGREGAMOS LA NUEVA FILA A LA MATRIZ (Posición 12)
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1095,7 +1101,9 @@ try:
                     {"Mes": "🔹 Q15 Satisfacción del Contacto"},
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"},
                     {"Mes": "✅ Cant. Patentadas y Entregadas"},
-                    {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."}
+                    {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."},
+                    {"Mes": "💵 Liquidación Aprobada (Prima)"},
+                    {"Mes": "💸 Prima Perdida (Oportunidad)"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1118,7 +1126,7 @@ try:
 
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    for r in range(13): datos_umbrales[r][mes_nombre] = "-"
+                    for r in range(15): datos_umbrales[r][mes_nombre] = "-"
                     datos_umbrales[0][mes_nombre] = "" 
                     datos_umbrales[5][mes_nombre] = ""
                     
@@ -1210,6 +1218,9 @@ try:
                     cant_vacios = 0
                     cant_fuera_tiempo = 0
                     
+                    liq_aprobada = 0.0
+                    liq_perdida = 0.0
+                    
                     if not df_duv.empty and "Anio_Patentamiento" in df_duv.columns:
                         df_mes_duv = df_duv[(df_duv["Anio_Patentamiento"] == anio_num) & (df_duv["Mes_Patentamiento"] == mes_num)].copy()
                         
@@ -1233,6 +1244,14 @@ try:
                             
                             cant_vacios = int(df_mes_duv["FECHA DE H.O."].isna().sum())
                             cant_fuera_tiempo = int((df_mes_duv["FECHA DE H.O."] > fecha_limite_ho).sum())
+                            
+                            # --- CÁLCULO MONETARIO ---
+                            if "Precio Facturado" in df_mes_duv.columns:
+                                suma_ok = df_mes_duv.loc[mascara_ok, "Precio Facturado"].sum()
+                                suma_fuera = df_mes_duv.loc[~mascara_ok, "Precio Facturado"].sum()
+                                
+                                liq_aprobada = suma_ok * (inc_tot / 100.0)
+                                liq_perdida = suma_fuera * (inc_tot / 100.0)
                     
                     # Escritura de resultados en el índice correcto
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
@@ -1250,6 +1269,14 @@ try:
                         datos_umbrales[12][mes_nombre] = f"{total_fuera}  (❌ {cant_fuera_tiempo} tarde | 🔲 {cant_vacios} vacíos)"
                     else:
                         datos_umbrales[12][mes_nombre] = "0"
+                        
+                    # Función para dar formato latino a la moneda ($ 1.500.000,00)
+                    def format_moneda(valor):
+                        if valor <= 0: return "-"
+                        return f"$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        
+                    datos_umbrales[13][mes_nombre] = format_moneda(liq_aprobada)
+                    datos_umbrales[14][mes_nombre] = format_moneda(liq_perdida)
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
@@ -1263,9 +1290,11 @@ try:
                     es_muestra = "Muestra Mínima" in str(row["Mes"])
                     es_incentivo_cabecera = "🎯" in str(row["Mes"])
                     es_driver = "🔹" in str(row["Mes"])
-                    es_cant_pat = "Cant. Patentadas" in str(row["Mes"])
-                    es_fuera_plazo = "Fuera de Plazo" in str(row["Mes"])
+                    es_cant_pat = "✅" in str(row["Mes"])
+                    es_fuera_plazo = "⚠️" in str(row["Mes"])
                     es_suma = "💰" in str(row["Mes"])
+                    es_liq_ok = "💵" in str(row["Mes"])
+                    es_liq_perdida = "💸" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
@@ -1273,6 +1302,8 @@ try:
                                 estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
                             elif es_driver or es_cant_pat or es_fuera_plazo:
                                 estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
+                            elif es_liq_ok or es_liq_perdida:
+                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: bold;')
                             elif es_suma:
                                 estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
                             else:
@@ -1309,6 +1340,12 @@ try:
                                         estilos.append('color: #2E7D32; font-weight: bold; text-align: center;') # Verde si hay 0 pendientes
                                     else:
                                         estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;') # Rojo con info si fallaron
+                                elif es_liq_ok:
+                                    if val == "-": estilos.append('color: #ccc; text-align: center;')
+                                    else: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_perdida:
+                                    if val == "-": estilos.append('color: #ccc; text-align: center;')
+                                    else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
                                 elif es_suma:
                                     estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
                                 else:
