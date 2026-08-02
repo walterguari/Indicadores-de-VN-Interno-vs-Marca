@@ -1301,8 +1301,100 @@ try:
                 df_umbrales = pd.DataFrame(datos_umbrales)
 
                 # ==========================================================
-                # 💵 CONTROL DE FLUJO DE CAJA (KPIs + GRÁFICO DE ÁREA)
+                # MATRIZ DE LIQUIDACIÓN Y ESTILOS (1° LA TABLA)
                 # ==========================================================
+                def estilar_filas_prima(row):
+                    estilos = []
+                    es_cabecera = "🔑" in str(row["Mes"])
+                    es_contacto = "Contacto Posterior" in str(row["Mes"])
+                    es_nps = "NPS Mínimo Global" in str(row["Mes"])
+                    es_mail = "Tasa de Mail Válido" in str(row["Mes"])
+                    es_muestra = "Muestra Mínima" in str(row["Mes"])
+                    es_incentivo_cabecera = "🎯" in str(row["Mes"])
+                    es_driver = "🔹" in str(row["Mes"])
+                    es_cant_pat = "✅" in str(row["Mes"])
+                    es_fuera_plazo = "⚠️" in str(row["Mes"])
+                    es_suma = "💰 SUMA" in str(row["Mes"])
+                    es_techo = "💰 Techo" in str(row["Mes"])
+                    es_liq_ok = "💵" in str(row["Mes"])
+                    es_liq_ho = "💸" in str(row["Mes"])
+                    es_liq_nps = "📉" in str(row["Mes"])
+                    
+                    for col in row.index:
+                        if col == "Mes":
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif es_driver or es_cant_pat or es_fuera_plazo:
+                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
+                            elif es_techo or es_liq_ok or es_liq_ho or es_liq_nps:
+                                estilos.append('background-color: white; color: #333; text-align: left; padding-left: 15px; font-weight: bold;')
+                            elif es_suma:
+                                estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
+                            else:
+                                estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
+                        else:
+                            val = row[col]
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif val == "-":
+                                estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
+                            else:
+                                if es_contacto or es_mail:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 80.0: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_nps:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 88.5: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_muestra:
+                                    try:
+                                        if int(val) >= meta_muestra: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_driver:
+                                    if val == "0.00%": estilos.append('color: #999; text-align: center;')
+                                    else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                elif es_cant_pat:
+                                    estilos.append('color: #333; font-weight: bold; text-align: center;')
+                                elif es_fuera_plazo:
+                                    if str(val) == "0":
+                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                    else:
+                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;')
+                                elif es_techo:
+                                    estilos.append('background-color: #FFF8E1; color: #F57F17; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_ok:
+                                    estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_ho or es_liq_nps:
+                                    estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_suma:
+                                    estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
+                                else:
+                                    estilos.append('text-align: center;')
+                    return estilos
+
+                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
+                
+                st.dataframe(
+                    df_estilizado, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Mes": st.column_config.TextColumn(
+                            "Concepto / Indicador", 
+                            width="medium",
+                            help="Techo Máximo (0.40%) | Liquidación Aprobada | Pérdida H.O. | Pérdida NPS"
+                        )
+                    }
+                )
+
+                # ==========================================================
+                # 💵 CONTROL DE FLUJO DE CAJA (2° LAS TARJETAS Y EL GRÁFICO)
+                # ==========================================================
+                st.markdown("---")
                 st.markdown("### 💵 Control de Flujo de Caja")
                 
                 # Selector de meses cobrados
@@ -1415,98 +1507,6 @@ try:
                 )
                 
                 st.plotly_chart(fig_flujo, use_container_width=True, key="fig_flujo_caja_cierre")
-                st.markdown("---")
-
-                # ==========================================================
-                # MATRIZ DE LIQUIDACIÓN Y ESTILOS
-                # ==========================================================
-                def estilar_filas_prima(row):
-                    estilos = []
-                    es_cabecera = "🔑" in str(row["Mes"])
-                    es_contacto = "Contacto Posterior" in str(row["Mes"])
-                    es_nps = "NPS Mínimo Global" in str(row["Mes"])
-                    es_mail = "Tasa de Mail Válido" in str(row["Mes"])
-                    es_muestra = "Muestra Mínima" in str(row["Mes"])
-                    es_incentivo_cabecera = "🎯" in str(row["Mes"])
-                    es_driver = "🔹" in str(row["Mes"])
-                    es_cant_pat = "✅" in str(row["Mes"])
-                    es_fuera_plazo = "⚠️" in str(row["Mes"])
-                    es_suma = "💰 SUMA" in str(row["Mes"])
-                    es_techo = "💰 Techo" in str(row["Mes"])
-                    es_liq_ok = "💵" in str(row["Mes"])
-                    es_liq_ho = "💸" in str(row["Mes"])
-                    es_liq_nps = "📉" in str(row["Mes"])
-                    
-                    for col in row.index:
-                        if col == "Mes":
-                            if es_cabecera or es_incentivo_cabecera:
-                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
-                            elif es_driver or es_cant_pat or es_fuera_plazo:
-                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
-                            elif es_techo or es_liq_ok or es_liq_ho or es_liq_nps:
-                                estilos.append('background-color: white; color: #333; text-align: left; padding-left: 15px; font-weight: bold;')
-                            elif es_suma:
-                                estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
-                            else:
-                                estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
-                        else:
-                            val = row[col]
-                            if es_cabecera or es_incentivo_cabecera:
-                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
-                            elif val == "-":
-                                estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
-                            else:
-                                if es_contacto or es_mail:
-                                    try:
-                                        if float(str(val).replace('%', '')) >= 80.0: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                    except: estilos.append('text-align: center;')
-                                elif es_nps:
-                                    try:
-                                        if float(str(val).replace('%', '')) >= 88.5: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                    except: estilos.append('text-align: center;')
-                                elif es_muestra:
-                                    try:
-                                        if int(val) >= meta_muestra: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
-                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
-                                    except: estilos.append('text-align: center;')
-                                elif es_driver:
-                                    if val == "0.00%": estilos.append('color: #999; text-align: center;')
-                                    else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
-                                elif es_cant_pat:
-                                    estilos.append('color: #333; font-weight: bold; text-align: center;')
-                                elif es_fuera_plazo:
-                                    if str(val) == "0":
-                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
-                                    else:
-                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;')
-                                elif es_techo:
-                                    estilos.append('background-color: #FFF8E1; color: #F57F17; font-weight: bold; text-align: right; padding-right: 15px;')
-                                elif es_liq_ok:
-                                    estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
-                                elif es_liq_ho or es_liq_nps:
-                                    estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
-                                elif es_suma:
-                                    estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
-                                else:
-                                    estilos.append('text-align: center;')
-                    return estilos
-
-                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
-                
-                st.dataframe(
-                    df_estilizado, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    column_config={
-                        "Mes": st.column_config.TextColumn(
-                            "Concepto / Indicador", 
-                            width="medium",
-                            help="Techo Máximo (0.40%) | Liquidación Aprobada | Pérdida H.O. | Pérdida NPS"
-                        )
-                    }
-                )
                 
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
