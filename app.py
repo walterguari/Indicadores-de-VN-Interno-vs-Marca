@@ -1060,6 +1060,7 @@ try:
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
+        
         # ==========================================================
         # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
@@ -1087,7 +1088,7 @@ try:
                 st.markdown("---")
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
-                # ESTRUCTURA DE LA TABLA CON LAS NUEVAS FILAS FINANCIERAS
+                # ESTRUCTURA DE LA TABLA CON LOS ÍCONOS DE AYUDA (ⓘ) EN LAS FILAS CLAVE
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1102,10 +1103,10 @@ try:
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"},
                     {"Mes": "✅ Cant. Patentadas y Entregadas en Regla"},
                     {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."},
-                    {"Mes": "💰 Techo Máximo Potencial (0.40%)"},
-                    {"Mes": "💵 Liquidación Aprobada (Efectiva)"},
-                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo)"},
-                    {"Mes": "📉 Pérdida por Calidad / NPS"}
+                    {"Mes": "💰 Techo Máximo Potencial (0.40%) ⓘ"},
+                    {"Mes": "💵 Liquidación Aprobada (Efectiva) ⓘ"},
+                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo) ⓘ"},
+                    {"Mes": "📉 Pérdida por Calidad / NPS ⓘ"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1367,27 +1368,26 @@ try:
                     return estilos
 
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
-                st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
-                # --- GUÍA METODOLÓGICA DESPLEGABLE ---
-                with st.expander("📘 Metodología de Cálculo y Glosario de Fórmulas (Hacé clic para ver cómo se calcula cada monto)"):
-                    st.markdown("""
-                    **1. 💰 Techo Máximo Potencial (0.40%):**  
-                    Representa el incentivo máximo que se hubiese cobrado si el 100% de los autos patentados hubieran tenido calidad perfecta y entrega a tiempo.  
-                    *Fórmula:* `Suma(Precio Facturado de TODOS los autos patentados en el mes) × 0.40%`
-
-                    **2. 💵 Liquidación Aprobada (Efectiva):**  
-                    Representa el monto ganado y habilitado para cobro según la performance real del mes.  
-                    *Fórmula:* `Suma(Precio Facturado de autos Entregados en Regla [H.O. ≤ día 24]) × [SUMA DRIVERS (Unitario)]`
-
-                    **3. 💸 Pérdida por H.O. (Fuera de Plazo):**  
-                    Monto que se **dejó de percibir exclusivamente por demoras o falta de registro en la fecha de Hand Over**, a pesar de haber ganado el porcentaje comercial.  
-                    *Fórmula:* `Suma(Precio Facturado de autos Fuera de Plazo o Sin H.O.) × [SUMA DRIVERS (Unitario)]`
-
-                    **4. 📉 Pérdida por Calidad / NPS:**  
-                    Monto no alcanzado por la brecha entre el puntaje de calidad logrado en encuestas y el ideal del 0.40%.  
-                    *Fórmula:* `[Techo Máximo Potencial] - [Liquidación Aprobada] - [Pérdida por H.O.]`
-                    """)
+                # USAMOS COLUMN_CONFIG PARA QUE SALGA LA EXPLICACIÓN EN EL ENCABEZADO DE LA TABLA
+                # Y CADA FILA TIENE SU PROPIO ÍCONO (ⓘ) CON EL NOMBRE PARA IDENTIFICACIÓN INMEDIATA
+                st.dataframe(
+                    df_estilizado, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Mes": st.column_config.TextColumn(
+                            "Concepto / Indicador",
+                            help="""
+                            GUÍA DE CÁLCULO FINANCIERO:
+                            • Techo Máximo Potencial (0.40%): Suma total facturada del mes x 0.40% (premio ideal).
+                            • Liquidación Aprobada: Suma facturada de autos EN REGLA (H.O. ≤ día 24) x % Drivers logrado.
+                            • Pérdida por H.O.: Suma facturada de autos tardíos/vacíos x % Drivers logrado.
+                            • Pérdida por Calidad / NPS: Brecha no cobrada respecto al techo ideal del 0.40%.
+                            """
+                        )
+                    }
+                )
                 
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
