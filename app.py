@@ -1060,7 +1060,6 @@ try:
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
-    
         # ==========================================================
         # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
@@ -1088,6 +1087,7 @@ try:
                 st.markdown("---")
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
+                # ESTRUCTURA DE LA TABLA CON LAS NUEVAS FILAS FINANCIERAS
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1100,10 +1100,12 @@ try:
                     {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
                     {"Mes": "🔹 Q15 Satisfacción del Contacto"},
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"},
-                    {"Mes": "✅ Cant. Patentadas y Entregadas"},
+                    {"Mes": "✅ Cant. Patentadas y Entregadas en Regla"},
                     {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."},
-                    {"Mes": "💵 Liquidación Aprobada (Prima)"},
-                    {"Mes": "💸 Prima Perdida (Oportunidad)"}
+                    {"Mes": "💰 Techo Máximo Potencial (0.40%)"},
+                    {"Mes": "💵 Liquidación Aprobada (Efectiva)"},
+                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo)"},
+                    {"Mes": "📉 Pérdida por Calidad / NPS"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1126,7 +1128,7 @@ try:
 
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
-                    for r in range(15): datos_umbrales[r][mes_nombre] = "-"
+                    for r in range(17): datos_umbrales[r][mes_nombre] = "-"
                     datos_umbrales[0][mes_nombre] = "" 
                     datos_umbrales[5][mes_nombre] = ""
                     
@@ -1213,13 +1215,15 @@ try:
                     inc_q15 = get_inc(nps_q15, 'q15') if llaves_ok else 0.0
                     inc_tot = inc_q2 + inc_q8 + inc_q4 + inc_q15
                     
-                    # 6. Cant. Patentadas y Entregadas (Hoja DUV) Y FUERA DE PLAZO
+                    # 6. Cantidades y Cálculos Monetarios
                     cant_pat_entregados = 0
                     cant_vacios = 0
                     cant_fuera_tiempo = 0
                     
+                    techo_maximo = 0.0
                     liq_aprobada = 0.0
-                    liq_perdida = 0.0
+                    liq_perdida_ho = 0.0
+                    liq_perdida_nps = 0.0
                     
                     if not df_duv.empty and "Anio_Patentamiento" in df_duv.columns:
                         df_mes_duv = df_duv[(df_duv["Anio_Patentamiento"] == anio_num) & (df_duv["Mes_Patentamiento"] == mes_num)].copy()
@@ -1238,49 +1242,57 @@ try:
                             # Límite de Hand Over: hasta el día 24 inclusive del mes calendario siguiente
                             fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
                             
-                            # Cuentas Exactas
                             mascara_ok = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
                             cant_pat_entregados = int(mascara_ok.sum())
                             
                             cant_vacios = int(df_mes_duv["FECHA DE H.O."].isna().sum())
                             cant_fuera_tiempo = int((df_mes_duv["FECHA DE H.O."] > fecha_limite_ho).sum())
                             
-                            # --- CÁLCULO MONETARIO ---
                             if "Precio Facturado" in df_mes_duv.columns:
+                                pozo_total_facturado = df_mes_duv["Precio Facturado"].sum()
                                 suma_ok = df_mes_duv.loc[mascara_ok, "Precio Facturado"].sum()
                                 suma_fuera = df_mes_duv.loc[~mascara_ok, "Precio Facturado"].sum()
                                 
+                                # 1. TECHO MÁXIMO (0.40% sobre el 100% de los patentados)
+                                techo_maximo = pozo_total_facturado * 0.0040
+                                
+                                # 2. LIQUIDACIÓN EFECTIVA (Drivers ganados * Válidos)
                                 liq_aprobada = suma_ok * (inc_tot / 100.0)
-                                liq_perdida = suma_fuera * (inc_tot / 100.0)
+                                
+                                # 3. PÉRDIDA POR H.O. (Autos no válidos * Drivers ganados)
+                                liq_perdida_ho = suma_fuera * (inc_tot / 100.0)
+                                
+                                # 4. PÉRDIDA POR CALIDAD / NPS (Diferencia residual contra el 0.40%)
+                                liq_perdida_nps = techo_maximo - liq_aprobada - liq_perdida_ho
+                                if liq_perdida_nps < 0: liq_perdida_nps = 0.0
                     
-                    # Escritura de resultados en el índice correcto
+                    # Carga de Resultados
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
                     datos_umbrales[9][mes_nombre] = f"{inc_q15:.2f}%"
                     datos_umbrales[10][mes_nombre] = f"{inc_tot:.2f}%"
                     
-                    # Escribimos los OK
                     datos_umbrales[11][mes_nombre] = str(cant_pat_entregados)
                     
-                    # Escribimos los Pendientes/Tarde de forma súper visual
                     total_fuera = cant_vacios + cant_fuera_tiempo
                     if total_fuera > 0:
                         datos_umbrales[12][mes_nombre] = f"{total_fuera}  (❌ {cant_fuera_tiempo} tarde | 🔲 {cant_vacios} vacíos)"
                     else:
                         datos_umbrales[12][mes_nombre] = "0"
                         
-                    # Función para dar formato latino a la moneda ($ 1.500.000,00)
                     def format_moneda(valor):
                         if valor <= 0: return "-"
                         return f"$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                         
-                    datos_umbrales[13][mes_nombre] = format_moneda(liq_aprobada)
-                    datos_umbrales[14][mes_nombre] = format_moneda(liq_perdida)
+                    datos_umbrales[13][mes_nombre] = format_moneda(techo_maximo)
+                    datos_umbrales[14][mes_nombre] = format_moneda(liq_aprobada)
+                    datos_umbrales[15][mes_nombre] = format_moneda(liq_perdida_ho)
+                    datos_umbrales[16][mes_nombre] = format_moneda(liq_perdida_nps)
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
-                # Estilizamos todo para que sea visual
+                # ESTILIZACIÓN DE FILAS Y COLUMNAS
                 def estilar_filas_prima(row):
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
@@ -1292,9 +1304,11 @@ try:
                     es_driver = "🔹" in str(row["Mes"])
                     es_cant_pat = "✅" in str(row["Mes"])
                     es_fuera_plazo = "⚠️" in str(row["Mes"])
-                    es_suma = "💰" in str(row["Mes"])
+                    es_suma = "💰 SUMA" in str(row["Mes"])
+                    es_techo = "💰 Techo" in str(row["Mes"])
                     es_liq_ok = "💵" in str(row["Mes"])
-                    es_liq_perdida = "💸" in str(row["Mes"])
+                    es_liq_ho = "💸" in str(row["Mes"])
+                    es_liq_nps = "📉" in str(row["Mes"])
                     
                     for col in row.index:
                         if col == "Mes":
@@ -1302,8 +1316,8 @@ try:
                                 estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
                             elif es_driver or es_cant_pat or es_fuera_plazo:
                                 estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
-                            elif es_liq_ok or es_liq_perdida:
-                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: bold;')
+                            elif es_techo or es_liq_ok or es_liq_ho or es_liq_nps:
+                                estilos.append('background-color: white; color: #333; text-align: left; padding-left: 15px; font-weight: bold;')
                             elif es_suma:
                                 estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
                             else:
@@ -1337,15 +1351,15 @@ try:
                                     estilos.append('color: #333; font-weight: bold; text-align: center;')
                                 elif es_fuera_plazo:
                                     if str(val) == "0":
-                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;') # Verde si hay 0 pendientes
+                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
                                     else:
-                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;') # Rojo con info si fallaron
+                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;')
+                                elif es_techo:
+                                    estilos.append('background-color: #FFF8E1; color: #F57F17; font-weight: bold; text-align: right; padding-right: 15px;')
                                 elif es_liq_ok:
-                                    if val == "-": estilos.append('color: #ccc; text-align: center;')
-                                    else: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
-                                elif es_liq_perdida:
-                                    if val == "-": estilos.append('color: #ccc; text-align: center;')
-                                    else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
+                                    estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_ho or es_liq_nps:
+                                    estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
                                 elif es_suma:
                                     estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
                                 else:
