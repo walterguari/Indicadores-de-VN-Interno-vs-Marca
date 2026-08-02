@@ -154,9 +154,7 @@ def load_data(url, tipo_base):
             # --- EXTRACCIÓN DE PRECIO FACTURADO PARA MATEMÁTICA ---
             col_precio = next((c for c in df.columns if 'precio facturad' in c.lower() or 'precio' in c.lower()), None)
             if col_precio:
-                # Se eliminan los símbolos $ y cualquier letra, dejando solo números, puntos y comas
                 precio_str = df[col_precio].astype(str).str.replace(r'[^\d,.-]', '', regex=True)
-                # Conversión de formato latino (1.500.000,50 -> 1500000.50)
                 precio_str = precio_str.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df["Precio Facturado"] = pd.to_numeric(precio_str, errors='coerce').fillna(0.0)
             else:
@@ -1060,7 +1058,7 @@ try:
                 st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
-        
+    
         # ==========================================================
         # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
@@ -1088,25 +1086,25 @@ try:
                 st.markdown("---")
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
-                # ESTRUCTURA DE LA TABLA CON LOS ÍCONOS DE AYUDA (ⓘ) EN LAS FILAS CLAVE
+                # ESTRUCTURA DE LA TABLA CON LA COLUMNA DE AYUDA INTEGRADA
                 datos_umbrales = [
-                    {"Mes": "🔑 UMBRALES (VENTAS)"},
-                    {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
-                    {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)"},
-                    {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)"},
-                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"},
-                    {"Mes": "🎯 INCENTIVOS COMERCIALES"},
-                    {"Mes": "🔹 Recomendación (Q2)"},
-                    {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
-                    {"Mes": "🔹 Q4 Cortesía y Amabilidad"},
-                    {"Mes": "🔹 Q15 Satisfacción del Contacto"},
-                    {"Mes": "💰 SUMA DRIVERS (Unitario)"},
-                    {"Mes": "✅ Cant. Patentadas y Entregadas en Regla"},
-                    {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."},
-                    {"Mes": "💰 Techo Máximo Potencial (0.40%) ⓘ"},
-                    {"Mes": "💵 Liquidación Aprobada (Efectiva) ⓘ"},
-                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo) ⓘ"},
-                    {"Mes": "📉 Pérdida por Calidad / NPS ⓘ"}
+                    {"Mes": "🔑 UMBRALES (VENTAS)", "Guía / Fórmula": "Parámetros del programa"},
+                    {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)", "Guía / Fórmula": "% de clientes contactados en 6 meses"},
+                    {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)", "Guía / Fórmula": "NPS Q2 Recomendación del mes"},
+                    {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)", "Guía / Fórmula": "% correos válidos en base de datos"},
+                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)", "Guía / Fórmula": "Cantidad mínima de encuestas requeridas"},
+                    {"Mes": "🎯 INCENTIVOS COMERCIALES", "Guía / Fórmula": "Desglose por pregunta clave"},
+                    {"Mes": "🔹 Recomendación (Q2)", "Guía / Fórmula": "Max: 0.20% (NPS ≥ 96) | Min: 0.13%"},
+                    {"Mes": "🔹 Q8 Info Entre Compra y Entrega", "Guía / Fórmula": "Max: 0.14% (NPS ≥ 96) | Min: 0.08%"},
+                    {"Mes": "🔹 Q4 Cortesía y Amabilidad", "Guía / Fórmula": "Max: 0.03% (NPS ≥ 96) | Min: 0.02%"},
+                    {"Mes": "🔹 Q15 Satisfacción del Contacto", "Guía / Fórmula": "Max: 0.03% (NPS ≥ 96) | Min: 0.02%"},
+                    {"Mes": "💰 SUMA DRIVERS (Unitario)", "Guía / Fórmula": "Porcentaje acumulado ganado en el mes"},
+                    {"Mes": "✅ Cant. Patentadas y Entregadas en Regla", "Guía / Fórmula": "Patentados del mes con H.O. ≤ día 24 sig."},
+                    {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O.", "Guía / Fórmula": "Patentados entregados tarde (>24) o sin fecha"},
+                    {"Mes": "💰 Techo Máximo Potencial (0.40%)", "Guía / Fórmula": "100% de autos patentados × 0.40% ideal"},
+                    {"Mes": "💵 Liquidación Aprobada (Efectiva)", "Guía / Fórmula": "Autos en regla (H.O. OK) × SUMA DRIVERS"},
+                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo)", "Guía / Fórmula": "Autos tardíos/sin H.O. × SUMA DRIVERS"},
+                    {"Mes": "📉 Pérdida por Calidad / NPS", "Guía / Fórmula": "Diferencia perdida por no llegar al 0.40%"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1240,7 +1238,6 @@ try:
                                 mes_sig = mes_num + 1
                                 anio_sig = anio_num
                             
-                            # Límite de Hand Over: hasta el día 24 inclusive del mes calendario siguiente
                             fecha_limite_ho = pd.to_datetime(f"{anio_sig}-{mes_sig:02d}-24 23:59:59")
                             
                             mascara_ok = (df_mes_duv["FECHA DE H.O."].notna()) & (df_mes_duv["FECHA DE H.O."] <= fecha_limite_ho)
@@ -1254,16 +1251,9 @@ try:
                                 suma_ok = df_mes_duv.loc[mascara_ok, "Precio Facturado"].sum()
                                 suma_fuera = df_mes_duv.loc[~mascara_ok, "Precio Facturado"].sum()
                                 
-                                # 1. TECHO MÁXIMO (0.40% sobre el 100% de los patentados)
                                 techo_maximo = pozo_total_facturado * 0.0040
-                                
-                                # 2. LIQUIDACIÓN EFECTIVA (Drivers ganados * Válidos)
                                 liq_aprobada = suma_ok * (inc_tot / 100.0)
-                                
-                                # 3. PÉRDIDA POR H.O. (Autos no válidos * Drivers ganados)
                                 liq_perdida_ho = suma_fuera * (inc_tot / 100.0)
-                                
-                                # 4. PÉRDIDA POR CALIDAD / NPS (Diferencia residual contra el 0.40%)
                                 liq_perdida_nps = techo_maximo - liq_aprobada - liq_perdida_ho
                                 if liq_perdida_nps < 0: liq_perdida_nps = 0.0
                     
@@ -1323,6 +1313,8 @@ try:
                                 estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
                             else:
                                 estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
+                        elif col == "Guía / Fórmula":
+                            estilos.append('background-color: #FAFAFA; color: #555; text-align: left; font-style: italic; font-size: 13px; border-left: 1px solid #E0E0E0;')
                         else:
                             val = row[col]
                             if es_cabecera or es_incentivo_cabecera:
@@ -1369,23 +1361,13 @@ try:
 
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 
-                # USAMOS COLUMN_CONFIG PARA QUE SALGA LA EXPLICACIÓN EN EL ENCABEZADO DE LA TABLA
-                # Y CADA FILA TIENE SU PROPIO ÍCONO (ⓘ) CON EL NOMBRE PARA IDENTIFICACIÓN INMEDIATA
                 st.dataframe(
                     df_estilizado, 
                     use_container_width=True, 
                     hide_index=True,
                     column_config={
-                        "Mes": st.column_config.TextColumn(
-                            "Concepto / Indicador",
-                            help="""
-                            GUÍA DE CÁLCULO FINANCIERO:
-                            • Techo Máximo Potencial (0.40%): Suma total facturada del mes x 0.40% (premio ideal).
-                            • Liquidación Aprobada: Suma facturada de autos EN REGLA (H.O. ≤ día 24) x % Drivers logrado.
-                            • Pérdida por H.O.: Suma facturada de autos tardíos/vacíos x % Drivers logrado.
-                            • Pérdida por Calidad / NPS: Brecha no cobrada respecto al techo ideal del 0.40%.
-                            """
-                        )
+                        "Mes": st.column_config.TextColumn("Concepto / Indicador", width="medium"),
+                        "Guía / Fórmula": st.column_config.TextColumn("📌 Guía de Cálculo", width="large")
                     }
                 )
                 
