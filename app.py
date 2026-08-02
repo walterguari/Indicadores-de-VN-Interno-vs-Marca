@@ -1084,6 +1084,14 @@ try:
                         marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
                 st.markdown("---")
+                
+                # --- AYUDA RÁPIDA DE FÓRMULAS CON ICONO TOOLTIP NATIVO ---
+                col_ayuda1, col_ayuda2, col_ayuda3, col_ayuda4 = st.columns(4)
+                col_ayuda1.button("💰 Techo Máximo ⓘ", help="Fórmula: Suma(Precio Facturado de TODOS los autos patentados) × 0.40%", use_container_width=True)
+                col_ayuda2.button("💵 Liquidación Aprobada ⓘ", help="Fórmula: Suma(Precio Facturado de autos con H.O. ≤ día 24) × SUMA DRIVERS", use_container_width=True)
+                col_ayuda3.button("💸 Pérdida por H.O. ⓘ", help="Fórmula: Suma(Precio Facturado de autos tardíos/sin fecha) × SUMA DRIVERS", use_container_width=True)
+                col_ayuda4.button("📉 Pérdida por Calidad ⓘ", help="Fórmula: [Techo Máximo] - [Liquidación Aprobada] - [Pérdida por H.O.]", use_container_width=True)
+                
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
                 # ESTRUCTURA LIMPIA SIN COLUMNA INTERMEDIA
@@ -1101,31 +1109,10 @@ try:
                     {"Mes": "💰 SUMA DRIVERS (Unitario)"},
                     {"Mes": "✅ Cant. Patentadas y Entregadas en Regla"},
                     {"Mes": "⚠️ Cant. Fuera de Plazo o Sin H.O."},
-                    {"Mes": "💰 Techo Máximo Potencial (0.40%) ⓘ"},
-                    {"Mes": "💵 Liquidación Aprobada (Efectiva) ⓘ"},
-                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo) ⓘ"},
-                    {"Mes": "📉 Pérdida por Calidad / NPS ⓘ"}
-                ]
-                
-                # DICCIONARIO DE TOOLTIPS FILA POR FILA (Para pasar al gráfico interactivo)
-                tooltips_filas = [
-                    "Sección de Umbrales Obligatorios",
-                    "Meta ≥ 80% | Clientes contactados en 6 meses posterior a compra",
-                    "Meta ≥ 88.5% | NPS de recomendación de concesionario (Q2)",
-                    "Meta ≥ 80% | Correos válidos y limpios en base de datos",
-                    "Meta ≥ 4 Peugeot / 3 Citroen | Encuestas válidas mínimas en el mes",
-                    "Desglose de porcentajes por cada pregunta clave",
-                    "Recomendación (Q2) -> Max: 0.20% (NPS ≥ 96) | Min: 0.13%",
-                    "Info Pre-entrega (Q8) -> Max: 0.14% (NPS ≥ 96) | Min: 0.08%",
-                    "Cortesía Vendedor (Q4) -> Max: 0.03% (NPS ≥ 96) | Min: 0.02%",
-                    "Sat. Contacto (Q15) -> Max: 0.03% (NPS ≥ 96) | Min: 0.02%",
-                    "SUMA DRIVERS -> Porcentaje acumulado unitario logrado en el mes",
-                    "Autos patentados en el mes entregados con H.O. <= día 24 del mes siguiente",
-                    "Autos patentados entregados tarde (> día 24) o sin fecha de H.O. cargada",
-                    "💰 TECHO MÁXIMO POTENCIAL (0.40%)<br>Incentivo máximo posible si el 100% de autos tuvieran calidad perfecta.<br>Fórmula: Suma(Precio Facturado de TODOS los autos patentados) × 0.40%",
-                    "💵 LIQUIDACIÓN APROBADA (EFECTIVA)<br>Monto ganado y habilitado para cobro según performance real.<br>Fórmula: Suma(Precio Facturado de autos Entregados en Regla [H.O. ≤ 24]) × [SUMA DRIVERS]",
-                    "💸 PÉRDIDA POR H.O. (FUERA DE PLAZO)<br>Monto dejado de percibir exclusivamente por demoras o falta de registro en H.O.<br>Fórmula: Suma(Precio Facturado de autos Fuera de Plazo/Sin H.O.) × [SUMA DRIVERS]",
-                    "📉 PÉRDIDA POR CALIDAD / NPS<br>Brecha monetaria perdida por no alcanzar el ideal del 0.40% en encuestas.<br>Fórmula: [Techo Máximo] - [Liquidación Aprobada] - [Pérdida por H.O.]"
+                    {"Mes": "💰 Techo Máximo Potencial (0.40%)"},
+                    {"Mes": "💵 Liquidación Aprobada (Efectiva)"},
+                    {"Mes": "💸 Pérdida por H.O. (Fuera de Plazo)"},
+                    {"Mes": "📉 Pérdida por Calidad / NPS"}
                 ]
                 
                 col_q14 = next((c for c in df_roar.columns if '14' in str(c) or 'contactad' in str(c).lower()), None)
@@ -1304,68 +1291,95 @@ try:
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
                 
-                # MATRIZ DE COLORES PARA PLOTLY TABLE
-                colores_fondo = []
-                colores_texto = []
-                num_filas = len(df_umbrales)
-                
-                for idx, r in df_umbrales.iterrows():
-                    mes_txt = str(r["Mes"])
-                    es_cabecera = "🔑" in mes_txt or "🎯" in mes_txt
-                    es_techo = "💰 Techo" in mes_txt
-                    es_liq_ok = "💵" in mes_txt
-                    es_liq_mal = "💸" in mes_txt or "📉" in mes_txt
-                    es_suma = "💰 SUMA" in mes_txt
+                # ESTILIZACIÓN DE FILAS Y COLUMNAS
+                def estilar_filas_prima(row):
+                    estilos = []
+                    es_cabecera = "🔑" in str(row["Mes"])
+                    es_contacto = "Contacto Posterior" in str(row["Mes"])
+                    es_nps = "NPS Mínimo Global" in str(row["Mes"])
+                    es_mail = "Tasa de Mail Válido" in str(row["Mes"])
+                    es_muestra = "Muestra Mínima" in str(row["Mes"])
+                    es_incentivo_cabecera = "🎯" in str(row["Mes"])
+                    es_driver = "🔹" in str(row["Mes"])
+                    es_cant_pat = "✅" in str(row["Mes"])
+                    es_fuera_plazo = "⚠️" in str(row["Mes"])
+                    es_suma = "💰 SUMA" in str(row["Mes"])
+                    es_techo = "💰 Techo" in str(row["Mes"])
+                    es_liq_ok = "💵" in str(row["Mes"])
+                    es_liq_ho = "💸" in str(row["Mes"])
+                    es_liq_nps = "📉" in str(row["Mes"])
                     
-                    # Colores por fila
-                    if es_cabecera:
-                        f_color = "#f0f2f6"; t_color = "#31333F"
-                    elif es_techo:
-                        f_color = "#FFF8E1"; t_color = "#F57F17"
-                    elif es_liq_ok:
-                        f_color = "#E8F5E9"; t_color = "#2E7D32"
-                    elif es_liq_mal:
-                        f_color = "#FFEBEE"; t_color = "#C62828"
-                    elif es_suma:
-                        f_color = "#E3F2FD"; t_color = "#1565C0"
-                    else:
-                        f_color = "white"; t_color = "#444444"
-                        
-                    colores_fondo.append(f_color)
-                    colores_texto.append(t_color)
+                    for col in row.index:
+                        if col == "Mes":
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; font-weight: bold; color: #31333F; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif es_driver or es_cant_pat or es_fuera_plazo:
+                                estilos.append('background-color: white; color: #444; text-align: left; padding-left: 15px; font-weight: 500;')
+                            elif es_techo or es_liq_ok or es_liq_ho or es_liq_nps:
+                                estilos.append('background-color: white; color: #333; text-align: left; padding-left: 15px; font-weight: bold;')
+                            elif es_suma:
+                                estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: left;')
+                            else:
+                                estilos.append('background-color: white; color: #555; text-align: left; font-weight: 500;')
+                        else:
+                            val = row[col]
+                            if es_cabecera or es_incentivo_cabecera:
+                                estilos.append('background-color: #f0f2f6; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd;')
+                            elif val == "-":
+                                estilos.append('background-color: #fdfdfd; color: #ccc; text-align: center;')
+                            else:
+                                if es_contacto or es_mail:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 80.0: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_nps:
+                                    try:
+                                        if float(str(val).replace('%', '')) >= 88.5: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_muestra:
+                                    try:
+                                        if int(val) >= meta_muestra: estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: center;')
+                                        else: estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: center;')
+                                    except: estilos.append('text-align: center;')
+                                elif es_driver:
+                                    if val == "0.00%": estilos.append('color: #999; text-align: center;')
+                                    else: estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                elif es_cant_pat:
+                                    estilos.append('color: #333; font-weight: bold; text-align: center;')
+                                elif es_fuera_plazo:
+                                    if str(val) == "0":
+                                        estilos.append('color: #2E7D32; font-weight: bold; text-align: center;')
+                                    else:
+                                        estilos.append('color: #C62828; font-weight: bold; text-align: center; font-size: 13px;')
+                                elif es_techo:
+                                    estilos.append('background-color: #FFF8E1; color: #F57F17; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_ok:
+                                    estilos.append('background-color: #E8F5E9; color: #2E7D32; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_liq_ho or es_liq_nps:
+                                    estilos.append('background-color: #FFEBEE; color: #C62828; font-weight: bold; text-align: right; padding-right: 15px;')
+                                elif es_suma:
+                                    estilos.append('background-color: #E3F2FD; color: #1565C0; font-weight: bold; text-align: center;')
+                                else:
+                                    estilos.append('text-align: center;')
+                    return estilos
+
+                df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 
-                # ARMADO DE TABLA PLOTLY CON TOOLTIP EN LA PRIMERA COLUMNA
-                headers = ["Concepto / Indicador"] + meses_nombres
-                celdas_valores = [df_umbrales["Mes"]] + [df_umbrales[m] for m in meses_nombres]
-                
-                fig_tabla = go.Figure(data=[go.Table(
-                    header=dict(
-                        values=[f"<b>{h}</b>" for h in headers],
-                        fill_color="#e6e9ef",
-                        align=["left"] + ["center"] * 12,
-                        font=dict(size=13, color="#222"),
-                        height=35
-                    ),
-                    cells=dict(
-                        values=celdas_valores,
-                        fill_color=[colores_fondo] * 13,
-                        font=dict(color=[colores_texto] * 13, size=12),
-                        align=["left"] + ["center"] * 12,
-                        height=30,
-                        # Agregamos los tooltips a la primera columna y limpiamos el hover de los meses
-                        hoverinfo=["text"] + ["skip"] * 12,
-                        hovertext=[tooltips_filas] + [None] * 12
-                    )
-                )])
-                
-                fig_tabla.update_layout(
-                    margin=dict(l=5, r=5, t=10, b=10),
-                    height=590,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                # TABLA NATIVA DE PANDAS SIN ERROR Y CON TOOLTIP GENERAL
+                st.dataframe(
+                    df_estilizado, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Mes": st.column_config.TextColumn(
+                            "Concepto / Indicador", 
+                            width="medium",
+                            help="Techo Máximo (0.40%) | Liquidación Aprobada | Pérdida H.O. | Pérdida NPS"
+                        )
+                    }
                 )
-                
-                st.plotly_chart(fig_tabla, use_container_width=True, config={'displayModeBar': False})
                 
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
