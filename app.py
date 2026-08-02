@@ -1094,7 +1094,6 @@ try:
                 
                 meses_nombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
-                # ESTRUCTURA LIMPIA SIN COLUMNA INTERMEDIA
                 datos_umbrales = [
                     {"Mes": "🔑 UMBRALES (VENTAS)"},
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
@@ -1132,6 +1131,11 @@ try:
                     if q_t == 'q8': return 0.14 if nps_v >= 96 else 0.08
                     if q_t in ['q4', 'q15']: return 0.03 if nps_v >= 96 else 0.02
                     return 0.0
+
+                # DICCIONARIOS PARA ALMACENAR MONTOS CRUDOS MES A MES (Para Flujo de Caja y Gráfico)
+                flujo_techo = {}
+                flujo_cobrado = {}
+                flujo_perdida = {}
 
                 for i, mes_nombre in enumerate(meses_nombres):
                     mes_num = i + 1
@@ -1265,7 +1269,12 @@ try:
                                 liq_perdida_nps = techo_maximo - liq_aprobada - liq_perdida_ho
                                 if liq_perdida_nps < 0: liq_perdida_nps = 0.0
                     
-                    # Carga de Resultados
+                    # Guardamos los valores crudos para los KPIs y el Gráfico
+                    flujo_techo[mes_nombre] = techo_maximo
+                    flujo_cobrado[mes_nombre] = liq_aprobada
+                    flujo_perdida[mes_nombre] = liq_perdida_ho + liq_perdida_nps
+
+                    # Carga de Resultados a la tabla
                     datos_umbrales[6][mes_nombre] = f"{inc_q2:.2f}%"
                     datos_umbrales[7][mes_nombre] = f"{inc_q8:.2f}%"
                     datos_umbrales[8][mes_nombre] = f"{inc_q4:.2f}%"
@@ -1290,8 +1299,127 @@ try:
                     datos_umbrales[16][mes_nombre] = format_moneda(liq_perdida_nps)
                 
                 df_umbrales = pd.DataFrame(datos_umbrales)
+
+                # ==========================================================
+                # 💵 CONTROL DE FLUJO DE CAJA (KPIs + GRÁFICO DE ÁREA)
+                # ==========================================================
+                st.markdown("### 💵 Control de Flujo de Caja")
                 
-                # ESTILIZACIÓN DE FILAS Y COLUMNAS
+                # Selector de meses cobrados
+                meses_cobrados_sel = st.multiselect(
+                    "Meses cobrados:", 
+                    options=meses_nombres, 
+                    default=meses_nombres[:5], 
+                    key="ms_meses_cobrados_flujo"
+                )
+                
+                # Cálculos de acumulados según lo tildado en el selector
+                tot_cobrado = sum(flujo_cobrado[m] for m in meses_cobrados_sel)
+                tot_perdido = sum(flujo_perdida[m] for m in meses_cobrados_sel)
+                tot_techo_cobrado = sum(flujo_techo[m] for m in meses_cobrados_sel)
+                
+                pct_alcanzado = (tot_cobrado / tot_techo_cobrado * 100) if tot_techo_cobrado > 0 else 0.0
+                
+                # PENDIENTE: Meses del año con patentamientos que NO están tildados como cobrados
+                meses_pendientes = [m for m in meses_nombres if m not in meses_cobrados_sel]
+                tot_pendiente = sum(flujo_cobrado[m] for m in meses_pendientes)
+                
+                def fmt_kpi(val):
+                    return f"${val:,.0f}".replace(",", ".")
+
+                # 4 Tarjetas visuales de KPI
+                kc1, kc2, kc3, kc4 = st.columns(4)
+                
+                with kc1:
+                    st.markdown(f"""
+                    <div style="background-color: white; border-left: 5px solid #00C853; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+                        <span style="color: #666; font-size: 13px; font-weight: bold;">💰 COBRADO</span><br>
+                        <span style="color: #00C853; font-size: 24px; font-weight: 800;">{fmt_kpi(tot_cobrado)}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with kc2:
+                    st.markdown(f"""
+                    <div style="background-color: white; border-left: 5px solid #D32F2F; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+                        <span style="color: #666; font-size: 13px; font-weight: bold;">💸 PERDIDO</span><br>
+                        <span style="color: #D32F2F; font-size: 24px; font-weight: 800;">{fmt_kpi(tot_perdido)}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with kc3:
+                    st.markdown(f"""
+                    <div style="background-color: white; border-left: 5px solid #651FFF; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+                        <span style="color: #666; font-size: 13px; font-weight: bold;">📊 % ALCANZADO</span><br>
+                        <span style="color: #651FFF; font-size: 24px; font-weight: 800;">{pct_alcanzado:.1f}%</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with kc4:
+                    st.markdown(f"""
+                    <div style="background-color: white; border-left: 5px solid #2962FF; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center;">
+                        <span style="color: #666; font-size: 13px; font-weight: bold;">⏳ PENDIENTE</span><br>
+                        <span style="color: #2962FF; font-size: 24px; font-weight: 800;">{fmt_kpi(tot_pendiente)}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Gráfico de Área Evolutiva (Verde alcanzado vs Techo vs Rojo perdida)
+                df_grafico = pd.DataFrame({
+                    "Mes": meses_nombres,
+                    "Alcanzado": [flujo_cobrado[m] for m in meses_nombres],
+                    "Máximo": [flujo_techo[m] for m in meses_nombres],
+                    "Pérdida": [flujo_perdida[m] for m in meses_nombres]
+                })
+                
+                fig_flujo = go.Figure()
+                
+                # Área Alcanzado (Verde)
+                fig_flujo.add_trace(go.Scatter(
+                    x=df_grafico["Mes"], y=df_grafico["Alcanzado"],
+                    mode='lines+markers+text',
+                    name='$ Alcanzado',
+                    line=dict(color='#00C853', width=3),
+                    fill='tozeroy',
+                    fillcolor='rgba(0, 200, 83, 0.15)',
+                    text=[f"${v/1e6:.1f}M" if v > 0 else "" for v in df_grafico["Alcanzado"]],
+                    textposition='top center'
+                ))
+                
+                # Línea Máximo Potencial (Punteada Gris)
+                fig_flujo.add_trace(go.Scatter(
+                    x=df_grafico["Mes"], y=df_grafico["Máximo"],
+                    mode='lines',
+                    name='$ Máximo',
+                    line=dict(color='#90A4AE', width=2, dash='dash')
+                ))
+                
+                # Área Pérdida (Roja)
+                fig_flujo.add_trace(go.Scatter(
+                    x=df_grafico["Mes"], y=df_grafico["Pérdida"],
+                    mode='lines+markers',
+                    name='$ Pérdida',
+                    line=dict(color='#E53935', width=2),
+                    fill='tozeroy',
+                    fillcolor='rgba(229, 57, 53, 0.15)'
+                ))
+                
+                fig_flujo.update_layout(
+                    height=320,
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    yaxis=dict(showgrid=True, gridcolor='#F5F5F5', tickprefix="$"),
+                    xaxis=dict(showgrid=False),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                
+                st.plotly_chart(fig_flujo, use_container_width=True, key="fig_flujo_caja_cierre")
+                st.markdown("---")
+
+                # ==========================================================
+                # MATRIZ DE LIQUIDACIÓN Y ESTILOS
+                # ==========================================================
                 def estilar_filas_prima(row):
                     estilos = []
                     es_cabecera = "🔑" in str(row["Mes"])
@@ -1367,7 +1495,6 @@ try:
 
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 
-                # TABLA NATIVA DE PANDAS SIN ERROR Y CON TOOLTIP GENERAL
                 st.dataframe(
                     df_estilizado, 
                     use_container_width=True, 
