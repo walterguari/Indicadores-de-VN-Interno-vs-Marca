@@ -1369,6 +1369,26 @@ try:
                 df_estilizado = df_umbrales.style.apply(estilar_filas_prima, axis=1)
                 st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
                 
+                # --- GUÍA METODOLÓGICA DESPLEGABLE ---
+                with st.expander("📘 Metodología de Cálculo y Glosario de Fórmulas (Hacé clic para ver cómo se calcula cada monto)"):
+                    st.markdown("""
+                    **1. 💰 Techo Máximo Potencial (0.40%):**  
+                    Representa el incentivo máximo que se hubiese cobrado si el 100% de los autos patentados hubieran tenido calidad perfecta y entrega a tiempo.  
+                    *Fórmula:* `Suma(Precio Facturado de TODOS los autos patentados en el mes) × 0.40%`
+
+                    **2. 💵 Liquidación Aprobada (Efectiva):**  
+                    Representa el monto ganado y habilitado para cobro según la performance real del mes.  
+                    *Fórmula:* `Suma(Precio Facturado de autos Entregados en Regla [H.O. ≤ día 24]) × [SUMA DRIVERS (Unitario)]`
+
+                    **3. 💸 Pérdida por H.O. (Fuera de Plazo):**  
+                    Monto que se **dejó de percibir exclusivamente por demoras o falta de registro en la fecha de Hand Over**, a pesar de haber ganado el porcentaje comercial.  
+                    *Fórmula:* `Suma(Precio Facturado de autos Fuera de Plazo o Sin H.O.) × [SUMA DRIVERS (Unitario)]`
+
+                    **4. 📉 Pérdida por Calidad / NPS:**  
+                    Monto no alcanzado por la brecha entre el puntaje de calidad logrado en encuestas y el ideal del 0.40%.  
+                    *Fórmula:* `[Techo Máximo Potencial] - [Liquidación Aprobada] - [Pérdida por H.O.]`
+                    """)
+                
             else:
                 st.info("No se encontraron datos en la hoja de Prima de Calidad (Enc Roar) o hubo un error al cargar.")
                         
