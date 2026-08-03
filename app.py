@@ -219,10 +219,17 @@ def crear_gauge_moderno(valor, titulo, objetivo=94.0):
         title = {'text': f"<b>{titulo}</b>", 'font': {'size': 12, 'color': '#555555'}},
         number = {'suffix': "%", 'font': {'size': 23, 'color': '#1E1E1E', 'family': 'Arial'}, 'valueformat': '.1f'},
         gauge = {
-            'axis': {'range': [-100, 100], 'visible': False}, 
-            'bar': {'color': color_viva, 'thickness': 0.15},
-            'bgcolor': "#F5F5F5",
-            'threshold': {'line': {'color': "black", 'width': 3}, 'thickness': 0.75, 'value': objetivo}
+            'axis': {
+                'range': [-100, 100], 
+                'visible': True, 
+                'showticklabels': False, 
+                'tickvals': [-100, -50, 0, 50, 100],
+                'tickwidth': 2,
+                'tickcolor': '#555555',
+                'ticklen': 5
+            }, 
+            'bar': {'color': color_viva, 'thickness': 0.25},
+            'bgcolor': "#E6E9EC"
         }
     ))
     fig.update_layout(height=165, margin=dict(l=15, r=15, t=35, b=5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
