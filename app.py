@@ -89,6 +89,7 @@ def load_data(url, tipo_base):
         elif tipo_base == "Gestión de Quejas":
             col_fecha = next((c for c in df.columns if 'fech' in c.lower()), "Fecha de Gestión")
             col_categorizacion = next((c for c in df.columns if 'categorizac' in c.lower() or 'categorí' in c.lower()), "Categorizacion del Reclamo")
+            col_sector = next((c for c in df.columns if 'sector' in c.lower() or 'afect' in c.lower()), "Sector Afectado")
             
             df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             
@@ -97,11 +98,7 @@ def load_data(url, tipo_base):
             df["Mes_Num"] = df["Fecha_Filtro"].dt.month
             
             df["Categorizacion del Reclamo"] = df[col_categorizacion].astype(str).str.strip().str.upper() if col_categorizacion in df.columns else "SIN CATEGORIZAR"
-            
-            if df.shape[1] >= 7:
-                df["Sector Afectado"] = df.iloc[:, 4:7].apply(lambda x: ' - '.join(x.dropna().astype(str).str.strip().str.upper()), axis=1)
-            else:
-                df["Sector Afectado"] = "SIN SECTOR"
+            df["Sector Afectado"] = df[col_sector].astype(str).str.strip().str.upper() if col_sector in df.columns else "SIN SECTOR"
             
             df["tipo de queja"] = df[next((c for c in df.columns if 'tipo' in c.lower()), df.columns[1])].astype(str).str.strip().str.upper()
             df["marca"] = df[next((c for c in df.columns if 'marc' in c.lower()), df.columns[2])].astype(str).str.strip().str.upper()
@@ -111,7 +108,7 @@ def load_data(url, tipo_base):
             df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'queja' in c.lower()), df.columns[6])].astype(str).str.strip().str.upper()
             df["Reporte tratado por"] = df[next((c for c in df.columns if 'report' in c.lower() or 'tratad' in c.lower() or 'estad' in c.lower()), df.columns[7])].astype(str).str.strip().str.upper()
             
-        # --- NORMALIZACIÓN PRIMA DE CALIDAD ---
+        # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
             df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
             col_fecha = next((c for c in df.columns if 'fecha de ultimo contacto' in c.lower()), None)
@@ -124,7 +121,7 @@ def load_data(url, tipo_base):
                 
             col_marca = next((c for c in df.columns if 'marca' in c.lower() or 'mar ca' in c.lower()), None)
             if col_marca:
-                mapeo_marcas = {"TY": "TOYOTA"}
+                mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
@@ -154,6 +151,7 @@ def load_data(url, tipo_base):
             col_ho = next((c for c in df.columns if 'h.o' in c.lower() or 'hand over' in c.lower()), None)
             col_marca = next((c for c in df.columns if 'marca' in c.lower()), None)
             
+            # --- EXTRACCIÓN DE PRECIO FACTURADO PARA MATEMÁTICA ---
             col_precio = next((c for c in df.columns if 'precio facturad' in c.lower() or 'precio' in c.lower()), None)
             if col_precio:
                 precio_str = df[col_precio].astype(str).str.replace(r'[^\d,.-]', '', regex=True)
@@ -173,7 +171,8 @@ def load_data(url, tipo_base):
             
             if col_marca and col_marca in df.columns:
                 marca_str = df[col_marca].astype(str).str.strip().str.upper()
-                df["Marca_Normalizada"] = np.where(marca_str.str.contains("TOYOTA", na=False), "TOYOTA", "OTRA")
+                df["Marca_Normalizada"] = np.where(marca_str.str.contains("PEUGEOT", na=False), "PEUGEOT",
+                                          np.where(marca_str.str.contains("CITRO", na=False), "CITROEN", "OTRA"))
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
@@ -472,76 +471,6 @@ try:
                 canales_i_g = set(df_i[df_i["MARCA"].isin(marcas)]["Canal de Venta"].dropna().unique())
                 canales_disp_g = sorted(list(canales_m_g | canales_i_g))
                 canales = st.multiselect("Canal de Venta:", options=canales_disp_g, default=canales_disp_g, key="g_canales")
-
-            # --- NUEVO MÓDULO: GRÁFICO ANUAL DESPLEGABLE LADO A LADO ---
-            with st.expander("📈 Ver anualmente el NPS (Evolución Mensual)", expanded=False):
-                # Se filtran los datos anuales ignorando la selección mensual del usuario
-                df_m_anual = df_m[(df_m["Anio"] == anio_sel) & (df_m["MARCA"].isin(marcas)) & (df_m["Canal de Venta"].isin(canales))]
-                df_i_anual = df_i[(df_i["Anio"] == anio_sel) & (df_i["MARCA"].isin(marcas)) & (df_i["Canal de Venta"].isin(canales))]
-                
-                meses_totales = sorted(list(set(df_m_anual['Mes_Num'].dropna().unique()) | set(df_i_anual['Mes_Num'].dropna().unique())))
-                
-                if meses_totales:
-                    datos_grafico = []
-                    for m in meses_totales:
-                        d_m_mes = df_m_anual[df_m_anual['Mes_Num'] == m]
-                        d_i_mes = df_i_anual[df_i_anual['Mes_Num'] == m]
-                        
-                        nps_m_mes = calcular_nps_detallado(d_m_mes[MAPA_M['q2']])[0] if not d_m_mes.empty else None
-                        nps_i_mes = calcular_nps_detallado(d_i_mes[MAPA_I['q2']])[0] if not d_i_mes.empty else None
-                        
-                        datos_grafico.append({
-                            "Mes": meses_n[int(m)],
-                            "NPS Oficial Marca": nps_m_mes,
-                            "NPS Encuesta Interna": nps_i_mes
-                        })
-                    
-                    df_graf_anual = pd.DataFrame(datos_grafico)
-                    
-                    fig_anual = go.Figure()
-                    
-                    # Barras de Marca
-                    fig_anual.add_trace(go.Bar(
-                        x=df_graf_anual["Mes"], 
-                        y=df_graf_anual["NPS Oficial Marca"],
-                        name="NPS Oficial Marca", 
-                        marker_color="#2962FF",
-                        text=[f"{v:.1f}%" if pd.notna(v) else "" for v in df_graf_anual["NPS Oficial Marca"]],
-                        textposition='inside'
-                    ))
-                    
-                    # Barras Internas
-                    fig_anual.add_trace(go.Bar(
-                        x=df_graf_anual["Mes"], 
-                        y=df_graf_anual["NPS Encuesta Interna"],
-                        name="NPS Encuesta Interna", 
-                        marker_color="#00C853",
-                        text=[f"{v:.1f}%" if pd.notna(v) else "" for v in df_graf_anual["NPS Encuesta Interna"]],
-                        textposition='inside'
-                    ))
-                    
-                    # Línea de Objetivo
-                    fig_anual.add_hline(
-                        y=94, 
-                        line_dash="dash", 
-                        line_color="#E53935", 
-                        annotation_text="Objetivo Calidad (94%)", 
-                        annotation_position="top right"
-                    )
-                    
-                    fig_anual.update_layout(
-                        barmode='group', 
-                        height=350, 
-                        margin=dict(l=20, r=20, t=30, b=20),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
-                        yaxis=dict(title="NPS (%)", range=[0, 110]),
-                        xaxis=dict(title="Meses"),
-                        paper_bgcolor='rgba(0,0,0,0)', 
-                        plot_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_anual, use_container_width=True)
-                else:
-                    st.info("No hay datos disponibles para mostrar la evolución anual con los filtros actuales.")
 
             df_m_time = df_m[(df_m["Anio"] == anio_sel) & (df_m["Mes_Num"].isin(meses_sel_nums))]
             df_i_time = df_i[(df_i["Anio"] == anio_sel) & (df_i["Mes_Num"].isin(meses_sel_nums))]
@@ -1157,7 +1086,7 @@ try:
                         anio_roar_sel = st.selectbox("Año:", options=anios_roar_str if anios_roar_str else ["2026"], key="sb_roar_anio_aislado")
                     
                     with col_f2:
-                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["TOYOTA"]
+                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["PEUGEOT", "CITROEN"]
                         marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"]
                         marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
@@ -1177,7 +1106,7 @@ try:
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
                     {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)"},
                     {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)"},
-                    {"Mes": "📊 Muestra Mínima (Meta ≥ 10 Toyota)"},
+                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"},
                     {"Mes": "🎯 INCENTIVOS COMERCIALES"},
                     {"Mes": "🔹 Recomendación (Q2)"},
                     {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
@@ -1198,9 +1127,10 @@ try:
                 meta_muestra = 0
                 if marca_roar_sel:
                     marcas_upper = [m.upper() for m in marca_roar_sel]
-                    if "TOYOTA" in marcas_upper: meta_muestra += 10
+                    if "PEUGEOT" in marcas_upper: meta_muestra += 4
+                    if "CITROEN" in marcas_upper: meta_muestra += 3
                 else:
-                    meta_muestra = 10 
+                    meta_muestra = 7 
                 
                 def get_inc(nps_v, q_t):
                     if nps_v <= 90.49: return 0.0
