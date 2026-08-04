@@ -15,15 +15,6 @@ URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5
 URL_BASE = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=0"
 URL_DUV = "https://docs.google.com/spreadsheets/d/1-ziHRIEWQZUxFUBGqoweX6PvY6sDgoaXGcueSUd9370/edit#gid=1482583153"
 
-# --- FUNCIONES CALLBACK PARA FILTROS ---
-def actualizar_filtro_marca(columna, valor):
-    st.session_state.filtro_col_m = columna
-    st.session_state.filtro_val_m = valor
-
-def actualizar_filtro_interna(columna, valor):
-    st.session_state.filtro_col_i = columna
-    st.session_state.filtro_val_i = valor
-
 # --- NLP BASADO EN REGLAS PARA COMENTARIOS ---
 def categorizar_comentario(texto):
     if pd.isna(texto) or str(texto).strip() == "" or str(texto).upper() == "NAN":
@@ -98,6 +89,7 @@ def load_data(url, tipo_base):
         elif tipo_base == "Gestión de Quejas":
             col_fecha = next((c for c in df.columns if 'fech' in c.lower()), "Fecha de Gestión")
             col_categorizacion = next((c for c in df.columns if 'categorizac' in c.lower() or 'categorí' in c.lower()), "Categorizacion del Reclamo")
+            col_sector = next((c for c in df.columns if 'sector' in c.lower() or 'afect' in c.lower()), "Sector Afectado")
             
             df["Fecha_Filtro"] = pd.to_datetime(df[col_fecha], dayfirst=True, errors='coerce')
             
@@ -106,12 +98,7 @@ def load_data(url, tipo_base):
             df["Mes_Num"] = df["Fecha_Filtro"].dt.month
             
             df["Categorizacion del Reclamo"] = df[col_categorizacion].astype(str).str.strip().str.upper() if col_categorizacion in df.columns else "SIN CATEGORIZAR"
-            
-            # Aislamos explícitamente las columnas E, F y G (índices 4, 5 y 6 asumiendo A=0)
-            if df.shape[1] >= 7:
-                df["Sector Afectado"] = df.iloc[:, 4:7].apply(lambda x: ' - '.join(x.dropna().astype(str).str.strip().str.upper()), axis=1)
-            else:
-                df["Sector Afectado"] = "SIN SECTOR"
+            df["Sector Afectado"] = df[col_sector].astype(str).str.strip().str.upper() if col_sector in df.columns else "SIN SECTOR"
             
             df["tipo de queja"] = df[next((c for c in df.columns if 'tipo' in c.lower()), df.columns[1])].astype(str).str.strip().str.upper()
             df["marca"] = df[next((c for c in df.columns if 'marc' in c.lower()), df.columns[2])].astype(str).str.strip().str.upper()
@@ -121,7 +108,7 @@ def load_data(url, tipo_base):
             df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'queja' in c.lower()), df.columns[6])].astype(str).str.strip().str.upper()
             df["Reporte tratado por"] = df[next((c for c in df.columns if 'report' in c.lower() or 'tratad' in c.lower() or 'estad' in c.lower()), df.columns[7])].astype(str).str.strip().str.upper()
             
-        # --- NORMALIZACIÓN PRIMA DE CALIDAD ---
+        # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
             df.columns = df.columns.astype(str).str.replace(r'\s+', ' ', regex=True).str.strip()
             col_fecha = next((c for c in df.columns if 'fecha de ultimo contacto' in c.lower()), None)
@@ -134,7 +121,7 @@ def load_data(url, tipo_base):
                 
             col_marca = next((c for c in df.columns if 'marca' in c.lower() or 'mar ca' in c.lower()), None)
             if col_marca:
-                mapeo_marcas = {"TY": "TOYOTA"}
+                mapeo_marcas = {"AP": "PEUGEOT", "AC": "CITROEN"}
                 df["Marca_Normalizada"] = df[col_marca].astype(str).str.strip().str.upper().map(mapeo_marcas).fillna(df[col_marca].astype(str).str.strip().str.upper())
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
@@ -184,7 +171,8 @@ def load_data(url, tipo_base):
             
             if col_marca and col_marca in df.columns:
                 marca_str = df[col_marca].astype(str).str.strip().str.upper()
-                df["Marca_Normalizada"] = np.where(marca_str.str.contains("TOYOTA", na=False), "TOYOTA", "OTRA")
+                df["Marca_Normalizada"] = np.where(marca_str.str.contains("PEUGEOT", na=False), "PEUGEOT",
+                                          np.where(marca_str.str.contains("CITRO", na=False), "CITROEN", "OTRA"))
             else:
                 df["Marca_Normalizada"] = "SIN MARCA"
             
@@ -396,13 +384,12 @@ try:
     if 'feedback_cat_sel' not in st.session_state: st.session_state.feedback_cat_sel = "TODAS"
 
     # --- CARGA SIMULTÁNEA DE BASES ---
-    with st.spinner("Sincronizando bases de datos..."):
-        df_m = load_data(URL_MARCA, "Encuestas de Marca")
-        df_i = load_data(URL_INTERNA, "Encuestas Internas")
-        df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
-        df_roar = load_data(URL_MARCA, "Prima de Calidad")
-        df_base = load_data(URL_BASE, "Base de Correos")
-        df_duv = load_data(URL_DUV, "Análisis DUV")
+    df_m = load_data(URL_MARCA, "Encuestas de Marca")
+    df_i = load_data(URL_INTERNA, "Encuestas Internas")
+    df_q = load_data(URL_QUEJAS, "Gestión de Quejas")
+    df_roar = load_data(URL_MARCA, "Prima de Calidad")
+    df_base = load_data(URL_BASE, "Base de Correos")
+    df_duv = load_data(URL_DUV, "Análisis DUV")
     
     if not df_m.empty and not df_i.empty:
         
@@ -504,19 +491,19 @@ try:
                     with cm_q1:
                         st.plotly_chart(crear_gauge_moderno(val_m_q1, MAPA_M['lbl_q1']), use_container_width=True, key="gauge_m_q1")
                         col_m1, col_m2, col_m3 = st.columns(3)
-                        col_m1.button(f"🟢 {p_m_q1} Prom", key="bm_q1_p", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Dinamica", "Promotor"))
-                        col_m2.button(f"🟡 {n_m_q1} Neu", key="bm_q1_n", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Dinamica", "Neutro"))
-                        col_m3.button(f"🔴 {d_m_q1} Det", key="bm_q1_d", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Dinamica", "Detractor"))
+                        if col_m1.button(f"🟢 {p_m_q1} Prom", key="bm_q1_p"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
+                        if col_m2.button(f"🟡 {n_m_q1} Neu", key="bm_q1_n"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
+                        if col_m3.button(f"🔴 {d_m_q1} Det", key="bm_q1_d"): st.session_state.filtro_col_m = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
                     with cm_q2:
                         st.plotly_chart(crear_gauge_moderno(nps_m_q2, MAPA_M['lbl_q2']), use_container_width=True, key="gauge_m_q2")
                         col_m4, col_m5, col_m6 = st.columns(3)
-                        col_m4.button(f"🟢 {p_m_q2} Prom", key="bm_q2_p", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Q2", "Promotor"))
-                        col_m5.button(f"🟡 {n_m_q2} Neu", key="bm_q2_n", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Q2", "Neutro"))
-                        col_m6.button(f"🔴 {d_m_q2} Det", key="bm_q2_d", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Q2", "Detractor"))
+                        if col_m4.button(f"🟢 {p_m_q2} Prom", key="bm_q2_p"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Promotor"; st.rerun()
+                        if col_m5.button(f"🟡 {n_m_q2} Neu", key="bm_q2_n"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Neutro"; st.rerun()
+                        if col_m6.button(f"🔴 {d_m_q2} Det", key="bm_q2_d"): st.session_state.filtro_col_m = "Cat_Filtro_Q2"; st.session_state.filtro_val_m = "Detractor"; st.rerun()
                     with cm_tot:
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.metric("Muestra", t_m_q1)
-                        if st.button("🔄 Todos", key="btn_clear_m", on_click=actualizar_filtro_marca, args=("Cat_Filtro_Dinamica", "Todos")): pass
+                        if st.button("🔄 Todos", key="btn_clear_m"): st.session_state.filtro_val_m = "Todos"; st.rerun()
 
                 df_m_sub = df_m_base.copy()
                 if st.session_state.filtro_val_m != "Todos":
@@ -576,19 +563,19 @@ try:
                     with ci_q1:
                         st.plotly_chart(crear_gauge_moderno(val_i_q1, MAPA_I['lbl_q1']), use_container_width=True, key="gauge_i_q1")
                         col_i1, col_i2, col_i3 = st.columns(3)
-                        col_i1.button(f"🟢 {p_i_q1} Prom", key="bi_q1_p", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Dinamica", "Promotor"))
-                        col_i2.button(f"🟡 {n_i_q1} Neu", key="bi_q1_n", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Dinamica", "Neutro"))
-                        col_i3.button(f"🔴 {d_i_q1} Det", key="bi_q1_d", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Dinamica", "Detractor"))
+                        if col_i1.button(f"🟢 {p_i_q1} Prom", key="bi_q1_p"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
+                        if col_i2.button(f"🟡 {n_i_q1} Neu", key="bi_q1_n"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
+                        if col_i3.button(f"🔴 {d_i_q1} Det", key="bi_q1_d"): st.session_state.filtro_col_i = "Cat_Filtro_Dinamica"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
                     with ci_q2:
                         st.plotly_chart(crear_gauge_moderno(nps_i_q2, MAPA_I['lbl_q2']), use_container_width=True, key="gauge_i_q2")
                         col_i4, col_i5, col_i6 = st.columns(3)
-                        col_i4.button(f"🟢 {p_i_q2} Prom", key="bi_q2_p", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Q2", "Promotor"))
-                        col_i5.button(f"🟡 {n_i_q2} Neu", key="bi_q2_n", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Q2", "Neutro"))
-                        col_i6.button(f"🔴 {d_i_q2} Det", key="bi_q2_d", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Q2", "Detractor"))
+                        if col_i4.button(f"🟢 {p_i_q2} Prom", key="bi_q2_p"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Promotor"; st.rerun()
+                        if col_i5.button(f"🟡 {n_i_q2} Neu", key="bi_q2_n"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Neutro"; st.rerun()
+                        if col_i6.button(f"🔴 {d_i_q2} Det", key="bi_q2_d"): st.session_state.filtro_col_i = "Cat_Filtro_Q2"; st.session_state.filtro_val_i = "Detractor"; st.rerun()
                     with ci_tot:
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.metric("Muestra", t_i_q1)
-                        if st.button("🔄 Todos", key="btn_clear_i", on_click=actualizar_filtro_interna, args=("Cat_Filtro_Dinamica", "Todos")): pass
+                        if st.button("🔄 Todos", key="btn_clear_i"): st.session_state.filtro_val_i = "Todos"; st.rerun()
 
                 df_i_sub = df_i_base.copy()
                 if st.session_state.filtro_val_i != "Todos":
@@ -1099,7 +1086,7 @@ try:
                         anio_roar_sel = st.selectbox("Año:", options=anios_roar_str if anios_roar_str else ["2026"], key="sb_roar_anio_aislado")
                     
                     with col_f2:
-                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["TOYOTA"]
+                        marcas_roar = sorted(list(df_roar["Marca_Normalizada"].dropna().unique())) if "Marca_Normalizada" in df_roar.columns else ["PEUGEOT", "CITROEN"]
                         marcas_roar = [m for m in marcas_roar if m != "SIN MARCA"]
                         marca_roar_sel = st.multiselect("Marcas:", options=marcas_roar, default=marcas_roar, key="sb_roar_marca_aislada")
                 
@@ -1119,7 +1106,7 @@ try:
                     {"Mes": "📞 Contacto Posterior 6MM (Meta ≥ 80%)"},
                     {"Mes": "🏢 NPS Mínimo Global (Meta ≥ 88.5%)"},
                     {"Mes": "✉️ Tasa de Mail Válido (Meta ≥ 80%)"},
-                    {"Mes": "📊 Muestra Mínima (Meta ≥ 10 Toyota)"},
+                    {"Mes": "📊 Muestra Mínima (Meta ≥ 4 Peugeot / 3 Citroen)"},
                     {"Mes": "🎯 INCENTIVOS COMERCIALES"},
                     {"Mes": "🔹 Recomendación (Q2)"},
                     {"Mes": "🔹 Q8 Info Entre Compra y Entrega"},
@@ -1140,9 +1127,10 @@ try:
                 meta_muestra = 0
                 if marca_roar_sel:
                     marcas_upper = [m.upper() for m in marca_roar_sel]
-                    if "TOYOTA" in marcas_upper: meta_muestra += 10
+                    if "PEUGEOT" in marcas_upper: meta_muestra += 4
+                    if "CITROEN" in marcas_upper: meta_muestra += 3
                 else:
-                    meta_muestra = 10 
+                    meta_muestra = 7 
                 
                 def get_inc(nps_v, q_t):
                     if nps_v <= 90.49: return 0.0
