@@ -480,86 +480,55 @@ try:
         # ==========================================================
         # DESPLEGABLE: COMPARACIÓN MENSUAL NPS INTERNO VS MARCA
         # ==========================================================
-        with st.expander("📊 Ver anualmente el NPS (Evolución Mensual): Interno vs Marca", expanded=False):
-            # Preparamos los datos agrupados por mes para Marca e Interna
-            df_m_anual = df_m_base.copy()
-            df_i_anual = df_i_base.copy()
-            
-            resumen_comparativo = []
-            meses_nombres_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-            
-            # Recorremos los meses disponibles en el año seleccionado
-            meses_disponibles_calc = sorted(list(set(df_m_anual["Mes_Num"].dropna().unique()) | set(df_i_anual["Mes_Num"].dropna().unique())))
-            
-            for m_num in meses_disponibles_calc:
-                m_num_int = int(m_num)
-                nombre_mes = meses_nombres_dict.get(m_num_int, str(m_num_int))
+        # --- NUEVO DESPLEGABLE: COMPARACIÓN ANUAL (IGNORA EL FILTRO DE MESES DE ARRIBA) ---
+            with st.expander("📊 Ver anualmente el NPS (Evolución Mensual): Interno vs Marca", expanded=False):
+                # Filtramos las bases originales solo por Año y Marcas seleccionadas
+                anios_comb_g_arr = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                anio_actual_sel = anio_sel if 'anio_sel' in locals() else (anios_comb_g_arr[0] if anios_comb_g_arr else 2026)
+                marcas_actuales_sel = marcas if 'marcas' in locals() else []
+
+                df_m_anual_global = df_m[(df_m["Anio"] == anio_actual_sel) & (df_m["MARCA"].isin(marcas_actuales_sel))]
+                df_i_anual_global = df_i[(df_i["Anio"] == anio_actual_sel) & (df_i["MARCA"].isin(marcas_actuales_sel))]
                 
-                # Datos de Marca (Pregunta Q2 - Recomendación)
-                sub_m_mes = df_m_anual[df_m_anual["Mes_Num"] == m_num_int]
-                nps_m_val, _, _, _, _ = calcular_nps_detallado(sub_m_mes[MAPA_M['q2']]) if not sub_m_mes.empty else (0.0, 0, 0, 0, 0)
+                resumen_comparativo = []
+                meses_nombres_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
                 
-                # Datos de Interna (Pregunta Q2 - Recomendación)
-                sub_i_mes = df_i_anual[df_i_anual["Mes_Num"] == m_num_int]
-                nps_i_val, _, _, _, _ = calcular_nps_detallado(sub_i_mes[MAPA_I['q2']]) if not sub_i_mes.empty else (0.0, 0, 0, 0, 0)
+                # Recorremos todos los meses del 1 al 12 que tengan registros
+                meses_disponibles_calc = sorted(list(set(df_m_anual_global["Mes_Num"].dropna().unique()) | set(df_i_anual_global["Mes_Num"].dropna().unique())))
                 
-                # Agregamos registro para Marca
-                if not sub_m_mes.empty:
-                    resumen_comparativo.append({
-                        "Mes": nombre_mes,
-                        "Mes_Num": m_num_int,
-                        "NPS": round(nps_m_val, 1),
-                        "Fuente": "NPS Oficial Marca"
-                    })
+                for m_num in meses_disponibles_calc:
+                    m_num_int = int(m_num)
+                    nombre_mes = meses_nombres_dict.get(m_num_int, str(m_num_int))
+                    
+                    sub_m_mes = df_m_anual_global[df_m_anual_global["Mes_Num"] == m_num_int]
+                    nps_m_val, _, _, _, _ = calcular_nps_detallado(sub_m_mes[MAPA_M['q2']]) if not sub_m_mes.empty else (0.0, 0, 0, 0, 0)
+                    
+                    sub_i_mes = df_i_anual_global[df_i_anual_global["Mes_Num"] == m_num_int]
+                    nps_i_val, _, _, _, _ = calcular_nps_detallado(sub_i_mes[MAPA_I['q2']]) if not sub_i_mes.empty else (0.0, 0, 0, 0, 0)
+                    
+                    if not sub_m_mes.empty:
+                        resumen_comparativo.append({"Mes": nombre_mes, "Mes_Num": m_num_int, "NPS": round(nps_m_val, 1), "Fuente": "NPS Oficial Marca"})
+                    if not sub_i_mes.empty:
+                        resumen_comparativo.append({"Mes": nombre_mes, "Mes_Num": m_num_int, "NPS": round(nps_i_val, 1), "Fuente": "NPS Encuesta Interna"})
                 
-                # Agregamos registro para Interna
-                if not sub_i_mes.empty:
-                    resumen_comparativo.append({
-                        "Mes": nombre_mes,
-                        "Mes_Num": m_num_int,
-                        "NPS": round(nps_i_val, 1),
-                        "Fuente": "NPS Encuesta Interna"
-                    })
-            
-            if resumen_comparativo:
-                df_comp_plot = pd.DataFrame(resumen_comparativo).sort_values("Mes_Num")
-                
-                fig_comparativa = px.bar(
-                    df_comp_plot,
-                    x="Mes",
-                    y="NPS",
-                    color="Fuente",
-                    barmode="group",
-                    text=df_comp_plot["NPS"].astype(str) + "%",
-                    color_discrete_map={
-                        "NPS Oficial Marca": "#1976D2",      # Azul corporativo
-                        "NPS Encuesta Interna": "#2E7D32"  # Verde institucional
-                    }
-                )
-                
-                # Línea horizontal discontinua de objetivo (ejemplo en 94%)
-                fig_comparativa.add_hline(
-                    y=94.0, 
-                    line_dash="dash", 
-                    line_color="#D32F2F", 
-                    annotation_text="Objetivo Calidad (94%)", 
-                    annotation_position="top right"
-                )
-                
-                fig_comparativa.update_traces(textposition='outside', textfont=dict(size=10))
-                fig_comparativa.update_layout(
-                    height=350,
-                    margin=dict(l=20, r=20, t=30, b=20),
-                    yaxis=dict(range=[-10, 110], title="NPS (%)"),
-                    xaxis=dict(title="Meses"),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
-                
-                st.plotly_chart(fig_comparativa, use_container_width=True, key="chart_comparativo_interno_marca")
-            else:
-                st.info("No hay suficientes datos registrados para generar la comparativa anual en los filtros seleccionados.")
+                if resumen_comparativo:
+                    df_comp_plot = pd.DataFrame(resumen_comparativo).sort_values("Mes_Num")
+                    fig_comparativa = px.bar(
+                        df_comp_plot, x="Mes", y="NPS", color="Fuente", barmode="group",
+                        text=df_comp_plot["NPS"].astype(str) + "%",
+                        color_discrete_map={"NPS Oficial Marca": "#1976D2", "NPS Encuesta Interna": "#2E7D32"}
+                    )
+                    fig_comparativa.add_hline(y=94.0, line_dash="dash", line_color="#D32F2F", annotation_text="Objetivo Calidad (94%)", annotation_position="top right")
+                    fig_comparativa.update_traces(textposition='outside', textfont=dict(size=10))
+                    fig_comparativa.update_layout(
+                        height=350, margin=dict(l=20, r=20, t=30, b=20),
+                        yaxis=dict(range=[-10, 110], title="NPS (%)"), xaxis=dict(title="Meses"),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                    )
+                    st.plotly_chart(fig_comparativa, use_container_width=True, key="chart_comparativo_interno_marca_anual")
+                else:
+                    st.info("No hay suficientes datos registrados para generar la comparativa anual con el año y marcas seleccionadas.")
 
             st.header(f"Resultados en Paralelo: {', '.join(meses_sel_nombres)}")
             sc_marca, sc_interna = st.columns([1, 1])
