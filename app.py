@@ -981,6 +981,9 @@ try:
             # ---------------------------------------------------------
             # LADO DERECHO: GESTIÓN DE QUEJAS
             # ---------------------------------------------------------
+            # ---------------------------------------------------------
+            # LADO DERECHO: GESTIÓN DE QUEJAS
+            # ---------------------------------------------------------
             with col_der_quejas:
                 st.header("⚠️ Auditoría de Quejas")
                 st.markdown("Análisis de insatisfacción y reclamos.")
@@ -1000,26 +1003,33 @@ try:
                             if ano_filtrado != "TODOS":
                                 df_temp_mes = df_temp_mes[df_temp_mes["Fecha_Filtro"].dt.year == int(ano_filtrado)]
                             meses_disp_nums = sorted(list(df_temp_mes["Mes_Num"].dropna().unique()))
-                            meses_disponibles = ["TODOS"] + [meses_dict[int(m)] for m in meses_disp_nums]
-                            mes_filtrado = st.selectbox("🗓️ Mes:", options=meses_disponibles, index=0, key="sb_ctrl_mes")
+                            
+                            # --- CAMBIO AQUÍ: Lista de meses disponibles y Multiselect ---
+                            meses_disponibles = [meses_dict[int(m)] for m in meses_disp_nums]
+                            meses_filtrados = st.multiselect("🗓️ Mes(es):", options=meses_disponibles, default=meses_disponibles, key="sb_ctrl_mes_multi")
+                            meses_sel_nums_q = [k for k, v in meses_dict.items() if v in meses_filtrados]
                             
                         with fc3:
                             df_temp_canal = df_temp_mes.copy()
-                            if mes_filtrado != "TODOS":
-                                mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
-                                df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"] == mes_num_sel]
+                            if meses_sel_nums_q:
+                                df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"].isin(meses_sel_nums_q)]
                             canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
                             canal_filtrado = st.selectbox("🔌 Canal:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
 
+                    # --- LÓGICA DE FILTRADO ACTUALIZADA ---
                     df_q_filtrado = df_q.copy()
                     if ano_filtrado != "TODOS":
                         df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
-                    if mes_filtrado != "TODOS":
-                        mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
-                        df_q_filtrado = df_q_filtrado[df_q_filtrado["Mes_Num"] == mes_num_sel]
+                    
+                    # Filtramos por los múltiples meses seleccionados
+                    if meses_sel_nums_q:
+                        df_q_filtrado = df_q_filtrado[df_q_filtrado["Mes_Num"].isin(meses_sel_nums_q)]
+                    elif not meses_filtrados: 
+                        # Si el usuario borra todos los meses del selector, vaciamos la tabla temporalmente
+                        df_q_filtrado = df_q_filtrado.iloc[0:0] 
+                        
                     if canal_filtrado != "TODOS":
                         df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
-
                     st.markdown("---")
                     tot_quejas = len(df_q_filtrado)
                     casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
