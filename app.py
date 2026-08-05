@@ -1104,10 +1104,10 @@ try:
                 
                 # Seguridad: Si por algún motivo la caché no encuentra la columna, la forzamos
                 if "comentario" not in df_visual_q.columns:
-                    df_visual_q["Comentario"] = "Sin comentarios cargados"
+                    df_visual_q["comentario"] = "Sin comentarios cargados"
 
                 # Definimos estrictamente las 6 columnas solicitadas
-                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "Comentario"]
+                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario"]
                 
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
                     "tipo de queja": "Tipo de Queja", 
@@ -1115,7 +1115,7 @@ try:
                     "cliente": "Cliente", 
                     "vendedor": "Vendedor",
                     "canal de venta": "Canal de Venta", 
-                    "Comentario": "Comentario del Cliente"
+                    "comentario": "Comentario del Cliente"
                 })
                 
                 buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave:", "", key="search_quejas_dinamico_input").strip()
@@ -1123,15 +1123,12 @@ try:
                     mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
                     df_tabla_final = df_tabla_final[mascara]
                 
-                # Renderizamos la tabla asignando un ancho mayor (large) a la columna de Comentario
+                # Renderizamos la tabla SIN column_config para que Streamlit auto-ajuste las 6 columnas a tu pantalla
                 st.dataframe(
                     df_tabla_final, 
                     use_container_width=True, 
                     hide_index=True, 
-                    height=280,
-                    column_config={
-                        "Comentario del Cliente": st.column_config.TextColumn("Comentario del Cliente", width="large")
-                    }
+                    height=280
                 )
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
