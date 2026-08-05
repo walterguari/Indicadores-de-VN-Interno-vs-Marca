@@ -11,7 +11,7 @@ st.set_page_config(page_title="Indicadores y seguimiento de calidad de venta -Au
 
 URL_MARCA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=567460007"
 URL_INTERNA = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=1131519764"
-URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=863634651"
+URL_QUEJAS = "https://docs.google.com/spreadsheets/d/1I4xJnZwgzr6oDLnF2L6-BAFRgE70NvI233_dbcNyDmw/edit?gid=505417406#gid=505417406"
 URL_BASE = "https://docs.google.com/spreadsheets/d/1p2xd-SNGEDZ_sT8P4xAjdLQEZ5uuEx57c3NhGOaBNTo/edit#gid=0"
 URL_DUV = "https://docs.google.com/spreadsheets/d/1-ziHRIEWQZUxFUBGqoweX6PvY6sDgoaXGcueSUd9370/edit#gid=1482583153"
 
@@ -1032,15 +1032,22 @@ try:
                         df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
                     st.markdown("---")
                     tot_quejas = len(df_q_filtrado)
-                    casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
-                    tot_resueltos = len(casos_resueltos)
-                    tot_abiertos = tot_quejas - tot_resueltos
+                    
+                    # --- NUEVA LÓGICA DE GESTIÓN Y RESOLUCIÓN ---
+                    # Las quejas pendientes son exclusivamente las que dicen "QUEJA SIN TRATAR" o están vacías
+                    # Cualquier otra cosa (ej. nombre de colaborador) cuenta como queja gestionada/resuelta
+                    mascara_pendientes = df_q_filtrado["Reporte tratado por"].str.contains("QUEJA SIN TRATAR", case=False, na=True) | \
+                                         (df_q_filtrado["Reporte tratado por"].str.strip() == "") | \
+                                         (df_q_filtrado["Reporte tratado por"] == "NAN")
+                    
+                    tot_abiertos = mascara_pendientes.sum() # Total de casos sin tratar
+                    tot_resueltos = tot_quejas - tot_abiertos # Casos que ya tienen nombre asignado
                     tasa_resolucion = (tot_resueltos / tot_quejas * 100) if tot_quejas > 0 else 0.0
                     
                     cq1, cq2, cq3 = st.columns(3)
-                    with cq1: st.metric("Quejas", f"{tot_quejas} casos")
-                    with cq2: st.metric("Pendientes", f"{tot_abiertos} activos")
-                    with cq3: st.metric("Resolución", f"{tasa_resolucion:.1f}%")
+                    with cq1: st.metric("Volumen Quejas", f"{tot_quejas} casos")
+                    with cq2: st.metric("Sin tratar (Pendientes)", f"{tot_abiertos} activos")
+                    with cq3: st.metric("% de Gestión", f"{tasa_resolucion:.1f}%")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     cg_col1, cg_col2 = st.columns(2)
