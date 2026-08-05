@@ -1102,10 +1102,11 @@ try:
                 if st.session_state.filtro_sec_q != "Todos":
                     df_visual_q = df_visual_q[df_visual_q["Sector Afectado"] == st.session_state.filtro_sec_q]
                 
-                if "Fecha_Filtro" in df_visual_q.columns:
-                    df_visual_q["Fecha de Gestión"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
-                
-                # Definimos solo las columnas que queremos mostrar
+                # Seguridad: Si por algún motivo la caché no encuentra la columna, la forzamos
+                if "comentario" not in df_visual_q.columns:
+                    df_visual_q["comentario"] = "Sin comentarios cargados"
+
+                # Definimos estrictamente las 6 columnas solicitadas
                 columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario"]
                 
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
@@ -1122,7 +1123,16 @@ try:
                     mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
                     df_tabla_final = df_tabla_final[mascara]
                 
-                st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
+                # Renderizamos la tabla asignando un ancho mayor (large) a la columna de Comentario
+                st.dataframe(
+                    df_tabla_final, 
+                    use_container_width=True, 
+                    hide_index=True, 
+                    height=280,
+                    column_config={
+                        "Comentario del Cliente": st.column_config.TextColumn("Comentario del Cliente", width="large")
+                    }
+                )
             else:
                 st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
     
