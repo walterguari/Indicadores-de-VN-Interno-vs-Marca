@@ -106,7 +106,7 @@ def load_data(url, tipo_base):
             df["vendedor"] = df[next((c for c in df.columns if 'vend' in c.lower() or 'ases' in c.lower()), df.columns[4])].astype(str).str.strip().str.upper()
             df["canal de venta"] = df[next((c for c in df.columns if 'canal' in c.lower()), df.columns[5])].astype(str).str.strip().str.upper()
             df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'detalle' in c.lower() or 'motivo' in c.lower()), df.columns[6])].astype(str).str.strip()
-            df["Reporte tratado por"] = df[next((c for c in df.columns if 'report' in c.lower() or 'tratad' in c.lower() or 'estad' in c.lower()), df.columns[7])].astype(str).str.strip().str.upper()
+            df["Reporte tratado por"] = df[next((c for c in df.columns if 'tratado por' in c.lower()), df.columns[-1])].astype(str).str.strip().str.upper()
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
         elif tipo_base == "Prima de Calidad":
