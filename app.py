@@ -1052,19 +1052,20 @@ try:
                     
                     if not df_funnel.empty:
                         fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo", color="Categorizacion del Reclamo", color_discrete_sequence=px.colors.sequential.Reds_r)
-                        fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
-                        st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico")
                         
-                        st.markdown(f"**Filtrado por Categoría:** `{st.session_state.filtro_cat_q}`")
-                        cols_cat = st.columns(3)
-                        if cols_cat[0].button(" Ver Todas", key="btn_cat_todas", use_container_width=True):
-                            st.session_state.filtro_cat_q = "Todas"; st.rerun()
-                        for i, row in df_funnel.head(5).reset_index(drop=True).iterrows():
-                            col_idx = (i + 1) % 3
-                            cat_nombre = str(row["Categorizacion del Reclamo"])
-                            btn_texto = f"📌 {cat_nombre[:14]}..." if len(cat_nombre) > 14 else f"📌 {cat_nombre}"
-                            if cols_cat[col_idx].button(btn_texto, key=f"btn_cat_din_{i}", help=cat_nombre, use_container_width=True):
-                                st.session_state.filtro_cat_q = cat_nombre; st.rerun()
+                        # Agregamos clickmode para que resalte la selección visualmente
+                        fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, clickmode='event+select')
+                        
+                        # Renderizamos el gráfico capturando el evento nativo de selección
+                        event_funnel = st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico", on_select="rerun", selection_mode="points")
+                        
+                        # Lógica para capturar el dato clickeado (Eje Y para embudos horizontales)
+                        if event_funnel and len(event_funnel.selection["points"]) > 0:
+                            st.session_state.filtro_cat_q = event_funnel.selection["points"][0]["y"]
+                        else:
+                            st.session_state.filtro_cat_q = "Todas"
+                            
+                        st.markdown(f"**Filtrado por Categoría:** `{st.session_state.filtro_cat_q}` (Haz clic en otra sección del gráfico para cambiar, o deselecciona para ver Todas)")
                     else:
                         st.info("Sin registros cargados para estructurar el Embudo.")
                         
@@ -1075,19 +1076,20 @@ try:
                     
                     if not df_sectores.empty:
                         fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos", text="Casos", color="Casos", color_continuous_scale="Oranges")
-                        fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False)
-                        st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico")
                         
-                        st.markdown(f"**Filtrado por Sector:** `{st.session_state.filtro_sec_q}`")
-                        cols_sec = st.columns(3)
-                        if cols_sec[0].button(" Ver Todos", key="btn_sec_todos", use_container_width=True):
-                            st.session_state.filtro_sec_q = "Todos"; st.rerun()
-                        for i, row in df_sectores.head(5).reset_index(drop=True).iterrows():
-                            col_idx = (i + 1) % 3
-                            sec_nombre = str(row["Sector Afectado"])
-                            btn_texto = f"📌 {sec_nombre[:14]}..." if len(sec_nombre) > 14 else f"📌 {sec_nombre}"
-                            if cols_sec[col_idx].button(btn_texto, key=f"btn_sec_din_{i}", help=sec_nombre, use_container_width=True):
-                                        st.session_state.filtro_sec_q = sec_nombre; st.rerun()
+                        # Agregamos clickmode para que resalte la selección visualmente
+                        fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False, clickmode='event+select')
+                        
+                        # Renderizamos el gráfico capturando el evento nativo de selección
+                        event_sec = st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico", on_select="rerun", selection_mode="points")
+                        
+                        # Lógica para capturar el dato clickeado (Eje X para barras verticales)
+                        if event_sec and len(event_sec.selection["points"]) > 0:
+                            st.session_state.filtro_sec_q = event_sec.selection["points"][0]["x"]
+                        else:
+                            st.session_state.filtro_sec_q = "Todos"
+                            
+                        st.markdown(f"**Filtrado por Sector:** `{st.session_state.filtro_sec_q}` (Haz clic en otra barra para cambiar, o deselecciona para ver Todos)")
                     else:
                         st.info("Sin registros cargados para estructurar las barras de sectores.")
                         
