@@ -105,7 +105,7 @@ def load_data(url, tipo_base):
             df["cliente"] = df[next((c for c in df.columns if 'client' in c.lower() or 'nombre' in c.lower()), df.columns[3])].astype(str).str.strip().str.upper()
             df["vendedor"] = df[next((c for c in df.columns if 'vend' in c.lower() or 'ases' in c.lower()), df.columns[4])].astype(str).str.strip().str.upper()
             df["canal de venta"] = df[next((c for c in df.columns if 'canal' in c.lower()), df.columns[5])].astype(str).str.strip().str.upper()
-            df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'queja' in c.lower()), df.columns[6])].astype(str).str.strip().str.upper()
+            df["comentario"] = df[next((c for c in df.columns if 'coment' in c.lower() or 'descrip' in c.lower() or 'detalle' in c.lower() or 'motivo' in c.lower()), df.columns[6])].astype(str).str.strip()
             df["Reporte tratado por"] = df[next((c for c in df.columns if 'report' in c.lower() or 'tratad' in c.lower() or 'estad' in c.lower()), df.columns[7])].astype(str).str.strip().str.upper()
             
         # --- NUEVA FUENTE: PRIMA DE CALIDAD ---
@@ -1105,10 +1105,16 @@ try:
                 if "Fecha_Filtro" in df_visual_q.columns:
                     df_visual_q["Fecha de Gestión"] = df_visual_q["Fecha_Filtro"].dt.strftime('%d/%m/%Y')
                 
-                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario", "Fecha de Gestión", "Reporte tratado por"]
+                # Definimos solo las columnas que queremos mostrar
+                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario"]
+                
                 df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
-                    "tipo de queja": "Tipo de Queja", "marca": "Marca", "cliente": "Cliente", "vendedor": "Vendedor",
-                    "canal de venta": "Canal de Venta", "comentario": "Comentario", "Reporte tratado por": "Reporte Tratado Por"
+                    "tipo de queja": "Tipo de Queja", 
+                    "marca": "Marca", 
+                    "cliente": "Cliente", 
+                    "vendedor": "Vendedor",
+                    "canal de venta": "Canal de Venta", 
+                    "comentario": "Comentario del Cliente"
                 })
                 
                 buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave:", "", key="search_quejas_dinamico_input").strip()
