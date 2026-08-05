@@ -438,12 +438,12 @@ try:
 
         st.title("📊 Indicadores y seguimiento de calidad de venta -Autociel")
         
-        tab_global, tab_unificada, tab_individual, tab_feedback, tab_quejas, tab_prima = st.tabs([
+        # --- AQUÍ DEFINIMOS LAS 5 PESTAÑAS (FUSIONANDO FEEDBACK Y QUEJAS) ---
+        tab_global, tab_unificada, tab_individual, tab_feedback, tab_prima = st.tabs([
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
             "👤 Ficha Individual por Asesor",
-            "💬 Análisis de Voz del Cliente",
-            "⚠️ Gestión de Quejas",
+            "💬 Análisis de Voz y Quejas",
             "🏆 Prima de Calidad"
         ])
 
@@ -480,9 +480,7 @@ try:
         # ==========================================================
         # DESPLEGABLE: COMPARACIÓN MENSUAL NPS INTERNO VS MARCA
         # ==========================================================
-        # --- NUEVO DESPLEGABLE: COMPARACIÓN ANUAL (IGNORA EL FILTRO DE MESES DE ARRIBA) ---
             with st.expander("📊 Ver anualmente el NPS (Evolución Mensual): Interno vs Marca", expanded=False):
-                # Filtramos las bases originales solo por Año y Marcas seleccionadas
                 anios_comb_g_arr = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
                 anio_actual_sel = anio_sel if 'anio_sel' in locals() else (anios_comb_g_arr[0] if anios_comb_g_arr else 2026)
                 marcas_actuales_sel = marcas if 'marcas' in locals() else []
@@ -493,7 +491,6 @@ try:
                 resumen_comparativo = []
                 meses_nombres_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
                 
-                # Recorremos todos los meses del 1 al 12 que tengan registros
                 meses_disponibles_calc = sorted(list(set(df_m_anual_global["Mes_Num"].dropna().unique()) | set(df_i_anual_global["Mes_Num"].dropna().unique())))
                 
                 for m_num in meses_disponibles_calc:
@@ -873,268 +870,240 @@ try:
                     st.info("El asesor seleccionado no cuenta con registros fechados para estructurar el desglose anual.")
 
         # ==========================================================
-        # 💬 TAB 4: ANÁLISIS DE VOZ DEL CLIENTE (FEEDBACK)
+        # 💬 TAB 4: ANÁLISIS DE VOZ DEL CLIENTE Y GESTIÓN DE QUEJAS
         # ==========================================================
         with tab_feedback:
-            with st.expander("⚙️ Filtros de Voz del Cliente", expanded=True):
-                col_ff1, col_ff2, col_ff3 = st.columns(3)
-                with col_ff1:
-                    anios_comb_f = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
-                    anio_sel_f = st.selectbox("Año:", options=anios_comb_f if anios_comb_f else [2026], key="f_anio")
-                with col_ff2:
-                    set_meses_f = set(df_m[df_m['Anio'] == anio_sel_f]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel_f]['Mes_Num'].unique())
-                    meses_disp_nums_f = sorted(list(set_meses_f))
-                    meses_disp_nombres_f = [meses_n[m] for m in meses_disp_nums_f] if meses_disp_nums_f else ["Mayo"]
-                    meses_sel_nombres_f = st.multiselect("Seleccione Mes(es):", options=meses_disp_nombres_f, default=meses_disp_nombres_f[-1:], key="f_meses")
-                    meses_sel_nums_f = [k for k, v in meses_n.items() if v in meses_sel_nombres_f]
-                with col_ff3:
-                    marcas_disp_f = sorted(list(set(df_m["MARCA"].dropna().unique()) | set(df_i["MARCA"].dropna().unique())))
-                    marcas_f = st.multiselect("MARCA:", options=marcas_disp_f, default=marcas_disp_f, key="f_marcas")
+            # Dividimos la pestaña entera en 2 columnas maestras (50% y 50%) con un espacio amplio en el medio
+            col_izq_voz, col_der_quejas = st.columns([1, 1], gap="large")
+            
+            # ---------------------------------------------------------
+            # LADO IZQUIERDO: VOZ DEL CLIENTE
+            # ---------------------------------------------------------
+            with col_izq_voz:
+                st.header("💬 Voz del Cliente")
+                st.markdown("Inteligencia de Texto basada en las encuestas.")
+                
+                with st.expander("⚙️ Filtros de Voz del Cliente", expanded=True):
+                    col_ff1, col_ff2, col_ff3 = st.columns(3)
+                    with col_ff1:
+                        anios_comb_f = sorted(list(set(df_m['Anio'].dropna().unique().astype(int)) | set(df_i['Anio'].dropna().unique().astype(int))), reverse=True)
+                        anio_sel_f = st.selectbox("Año:", options=anios_comb_f if anios_comb_f else [2026], key="f_anio")
+                    with col_ff2:
+                        set_meses_f = set(df_m[df_m['Anio'] == anio_sel_f]['Mes_Num'].unique()) | set(df_i[df_i['Anio'] == anio_sel_f]['Mes_Num'].unique())
+                        meses_disp_nums_f = sorted(list(set_meses_f))
+                        meses_disp_nombres_f = [meses_n[m] for m in meses_disp_nums_f] if meses_disp_nums_f else ["Mayo"]
+                        meses_sel_nombres_f = st.multiselect("Mes(es):", options=meses_disp_nombres_f, default=meses_disp_nombres_f[-1:], key="f_meses")
+                        meses_sel_nums_f = [k for k, v in meses_n.items() if v in meses_sel_nombres_f]
+                    with col_ff3:
+                        marcas_disp_f = sorted(list(set(df_m["MARCA"].dropna().unique()) | set(df_i["MARCA"].dropna().unique())))
+                        marcas_f = st.multiselect("MARCA:", options=marcas_disp_f, default=marcas_disp_f, key="f_marcas")
 
-                canales_m_f = set(df_m[df_m["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
-                canales_i_f = set(df_i[df_i["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
-                canales_disp_f = sorted(list(canales_m_f | canales_i_f))
-                canales_f = st.multiselect("Canal de Venta:", options=canales_disp_f, default=canales_disp_f, key="f_canales")
+                    canales_m_f = set(df_m[df_m["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
+                    canales_i_f = set(df_i[df_i["MARCA"].isin(marcas_f)]["Canal de Venta"].dropna().unique())
+                    canales_disp_f = sorted(list(canales_m_f | canales_i_f))
+                    canales_f = st.multiselect("Canal de Venta:", options=canales_disp_f, default=canales_disp_f, key="f_canales")
 
-            df_m_time_f = df_m[(df_m["Anio"] == anio_sel_f) & (df_m["Mes_Num"].isin(meses_sel_nums_f))]
-            df_i_time_f = df_i[(df_i["Anio"] == anio_sel_f) & (df_i["Mes_Num"].isin(meses_sel_nums_f))]
-            df_m_base = df_m_time_f[(df_m_time_f["MARCA"].isin(marcas_f)) & (df_m_time_f["Canal de Venta"].isin(canales_f))]
-            df_i_base = df_i_time_f[(df_i_time_f["MARCA"].isin(marcas_f)) & (df_i_time_f["Canal de Venta"].isin(canales_f))]
+                df_m_time_f = df_m[(df_m["Anio"] == anio_sel_f) & (df_m["Mes_Num"].isin(meses_sel_nums_f))]
+                df_i_time_f = df_i[(df_i["Anio"] == anio_sel_f) & (df_i["Mes_Num"].isin(meses_sel_nums_f))]
+                df_m_base = df_m_time_f[(df_m_time_f["MARCA"].isin(marcas_f)) & (df_m_time_f["Canal de Venta"].isin(canales_f))]
+                df_i_base = df_i_time_f[(df_i_time_f["MARCA"].isin(marcas_f)) & (df_i_time_f["Canal de Venta"].isin(canales_f))]
 
-            st.header("💬 Análisis Avanzado de Voz del Cliente")
-            st.markdown("Auditoría de Reclamos e Inteligencia de Texto basada en las opiniones de las encuestas.")
-            
-            # --- MÓDULO 1: GRÁFICOS DE LÍNEA DE PORCENTAJE DE RECLAMOS ---
-            st.markdown("### 📈 Tendencia Mensual del % de Reclamos Potenciales (Notas ≤ 8)")
-            st.markdown("Análisis estricto: Se considera *Reclamo* a cualquier encuesta donde al menos una pregunta clave tenga nota menor o igual a 8.")
-            
-            col_linea_m, col_linea_i = st.columns(2)
-            
-            with col_linea_m:
-                columnas_marca_reclamo = [MAPA_M['q1'], MAPA_M['q2'], MAPA_M['q4'], MAPA_M['q5'], MAPA_M['q8'], MAPA_M['q11'], MAPA_M['q13'], MAPA_M['q15']]
-                fig_linea_m = crear_linea_reclamos_porcentaje(df_m_base, columnas_marca_reclamo, "🏢 Evolución % Reclamos - Encuestas de Marca", meses_n, "marca")
-                st.plotly_chart(fig_linea_m, use_container_width=True)
+                st.markdown("---")
+                st.markdown("### 📈 Tendencia Mensual del % de Reclamos")
+                col_linea_m, col_linea_i = st.columns(2)
                 
-            with col_linea_i:
-                columnas_interna_reclamo = [MAPA_I['q1'], MAPA_I['q2'], MAPA_I['q4'], MAPA_I['q8'], MAPA_I['q11'], MAPA_I['q15']]
-                fig_linea_i = crear_linea_reclamos_porcentaje(df_i_base, columnas_interna_reclamo, "🎯 Evolución % Reclamos - Encuestas Internas", meses_n, "interna")
-                st.plotly_chart(fig_linea_i, use_container_width=True)
-                
-            st.markdown("---")
-            
-            # --- MÓDULO 2: BARRAS HORIZONTALES ESPEJO POR TEMÁTICA ---
-            st.markdown("### 📊 Clasificación y Frecuencia de Temas Operativos")
-            col_bar_m, col_bar_i = st.columns(2)
-            
-            with col_bar_m:
-                st.markdown("##### Temáticas en Comentarios de Marca (`Q3`)")
-                df_m_fback = df_m_base[df_m_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
-                if not df_m_fback.empty:
-                    conteo_com_m = df_m_fback["Categoria_Comentario"].value_counts().reset_index()
-                    conteo_com_m.columns = ["Categoría", "Casos"]
-                    fig_bar_m = px.bar(conteo_com_m, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Reds")
-                    fig_bar_m.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
-                    st.plotly_chart(fig_bar_m, use_container_width=True)
-                else:
-                    st.caption("No hay comentarios válidos para categorizar en Marca.")
+                with col_linea_m:
+                    columnas_marca_reclamo = [MAPA_M['q1'], MAPA_M['q2'], MAPA_M['q4'], MAPA_M['q5'], MAPA_M['q8'], MAPA_M['q11'], MAPA_M['q13'], MAPA_M['q15']]
+                    fig_linea_m = crear_linea_reclamos_porcentaje(df_m_base, columnas_marca_reclamo, "🏢 Marca", meses_n, "marca")
+                    st.plotly_chart(fig_linea_m, use_container_width=True)
                     
-            with col_bar_i:
-                st.markdown("##### Temáticas en Comentarios Internos")
-                df_i_fback = df_i_base[df_i_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
-                if not df_i_fback.empty:
-                    conteo_com_i = df_i_fback["Categoria_Comentario"].value_counts().reset_index()
-                    conteo_com_i.columns = ["Categoría", "Casos"]
-                    fig_bar_i = px.bar(conteo_com_i, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Blues")
-                    fig_bar_i.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
-                    st.plotly_chart(fig_bar_i, use_container_width=True)
-                else:
-                    st.caption("No hay comentarios válidos para categorizar en Encuesta Interna.")
+                with col_linea_i:
+                    columnas_interna_reclamo = [MAPA_I['q1'], MAPA_I['q2'], MAPA_I['q4'], MAPA_I['q8'], MAPA_I['q11'], MAPA_I['q15']]
+                    fig_linea_i = crear_linea_reclamos_porcentaje(df_i_base, columnas_interna_reclamo, "🎯 Internas", meses_n, "interna")
+                    st.plotly_chart(fig_linea_i, use_container_width=True)
                     
-            st.markdown("---")
-            
-            # --- MÓDULO 3: CENTRAL DE DRILL-DOWN INTELIGENTE ---
-            st.markdown("### 🔍 Central de Perforación de Texto")
-            st.markdown("Seleccioná un tema estratégico para aislar y leer las verbalizaciones completas de tus clientes.")
-            
-            categorias_fback_disp = ["TODAS", "ATENCIÓN Y ASESORAMIENTO", "PROCESO DE ENTREGA / TIEMPOS", "PRECIO Y FINANCIACIÓN", "ESTADO Y LIMPIEZA DEL VEHÍCULO", "GESTORÍA Y ADMINISTRACIÓN", "TEST DRIVE", "OTROS / GENERAL"]
-            cat_fback_sel = st.selectbox("📌 Filtrar Tabla por Categoría de Feedback:", options=categorias_fback_disp, index=0, key="sb_feedback_cat_drill")
-            
-            f_col_m, f_col_i = st.columns(2)
-            
-            with f_col_m:
-                st.markdown("##### Verbatim Detallado - Marca")
-                df_tabla_fback_m = df_m_base.copy()
-                if cat_fback_sel != "TODAS":
-                    df_tabla_fback_m = df_tabla_fback_m[df_tabla_fback_m["Categoria_Comentario"] == cat_fback_sel]
+                st.markdown("---")
+                st.markdown("### 📊 Temas Operativos")
+                col_bar_m, col_bar_i = st.columns(2)
                 
-                df_tabla_fback_m_v = df_tabla_fback_m[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy()
-                if not df_tabla_fback_m_v.empty:
-                    df_tabla_fback_m_v["Fecha de ultimo contacto"] = df_tabla_fback_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                    df_tabla_fback_m_v = df_tabla_fback_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
-                st.dataframe(df_tabla_fback_m_v, use_container_width=True, hide_index=True, height=200)
+                with col_bar_m:
+                    st.markdown("##### Marca")
+                    df_m_fback = df_m_base[df_m_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
+                    if not df_m_fback.empty:
+                        conteo_com_m = df_m_fback["Categoria_Comentario"].value_counts().reset_index()
+                        conteo_com_m.columns = ["Categoría", "Casos"]
+                        fig_bar_m = px.bar(conteo_com_m, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Reds")
+                        fig_bar_m.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
+                        st.plotly_chart(fig_bar_m, use_container_width=True)
+                    else:
+                        st.caption("No hay comentarios válidos.")
+                        
+                with col_bar_i:
+                    st.markdown("##### Internos")
+                    df_i_fback = df_i_base[df_i_base["Categoria_Comentario"] != "SIN COMENTARIO"].copy()
+                    if not df_i_fback.empty:
+                        conteo_com_i = df_i_fback["Categoria_Comentario"].value_counts().reset_index()
+                        conteo_com_i.columns = ["Categoría", "Casos"]
+                        fig_bar_i = px.bar(conteo_com_i, x="Casos", y="Categoría", orientation='h', color="Casos", color_continuous_scale="Blues")
+                        fig_bar_i.update_layout(height=230, margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
+                        st.plotly_chart(fig_bar_i, use_container_width=True)
+                    else:
+                        st.caption("No hay comentarios válidos.")
+                        
+                st.markdown("---")
+                st.markdown("### 🔍 Perforación de Texto")
+                categorias_fback_disp = ["TODAS", "ATENCIÓN Y ASESORAMIENTO", "PROCESO DE ENTREGA / TIEMPOS", "PRECIO Y FINANCIACIÓN", "ESTADO Y LIMPIEZA DEL VEHÍCULO", "GESTORÍA Y ADMINISTRACIÓN", "TEST DRIVE", "OTROS / GENERAL"]
+                cat_fback_sel = st.selectbox("📌 Filtrar por Categoría:", options=categorias_fback_disp, index=0, key="sb_feedback_cat_drill")
                 
-            with f_col_i:
-                st.markdown("##### Verbatim Detallado - Internas")
-                df_tabla_fback_i = df_i_base.copy()
-                if cat_fback_sel != "TODAS":
-                    df_tabla_fback_i = df_tabla_fback_i[df_tabla_fback_i["Categoria_Comentario"] == cat_fback_sel]
+                f_col_m, f_col_i = st.columns(2)
+                with f_col_m:
+                    st.markdown("##### Marca")
+                    df_tabla_fback_m = df_m_base.copy()
+                    if cat_fback_sel != "TODAS":
+                        df_tabla_fback_m = df_tabla_fback_m[df_tabla_fback_m["Categoria_Comentario"] == cat_fback_sel]
+                    df_tabla_fback_m_v = df_tabla_fback_m[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_M['q3'], "Vendedor"]].copy()
+                    if not df_tabla_fback_m_v.empty:
+                        df_tabla_fback_m_v["Fecha de ultimo contacto"] = df_tabla_fback_m_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                        df_tabla_fback_m_v = df_tabla_fback_m_v.rename(columns={MAPA_M['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                    st.dataframe(df_tabla_fback_m_v, use_container_width=True, hide_index=True, height=200)
                     
-                df_tabla_fback_i_v = df_tabla_fback_i[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy()
-                if not df_tabla_fback_i_v.empty:
-                    df_tabla_fback_i_v["Fecha de ultimo contacto"] = df_tabla_fback_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
-                    df_tabla_fback_i_v = df_tabla_fback_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
-                st.dataframe(df_tabla_fback_i_v, use_container_width=True, hide_index=True, height=200)
+                with f_col_i:
+                    st.markdown("##### Internas")
+                    df_tabla_fback_i = df_i_base.copy()
+                    if cat_fback_sel != "TODAS":
+                        df_tabla_fback_i = df_tabla_fback_i[df_tabla_fback_i["Categoria_Comentario"] == cat_fback_sel]
+                    df_tabla_fback_i_v = df_tabla_fback_i[["Fecha de ultimo contacto", "Nombre de cliente", MAPA_I['q3'], "Vendedor"]].copy()
+                    if not df_tabla_fback_i_v.empty:
+                        df_tabla_fback_i_v["Fecha de ultimo contacto"] = df_tabla_fback_i_v["Fecha de ultimo contacto"].dt.strftime('%d/%m/%Y')
+                        df_tabla_fback_i_v = df_tabla_fback_i_v.rename(columns={MAPA_I['q3']: 'Comentario Textual'}).dropna(subset=['Comentario Textual'])
+                    st.dataframe(df_tabla_fback_i_v, use_container_width=True, hide_index=True, height=200)
 
-        # ==========================================================
-        # ⚠️ TAB 5: GESTIÓN DE QUEJAS
-        # ==========================================================
-        with tab_quejas:
-            st.header("⚠️ Auditoría y Gestión de Quejas de Clientes")
-            st.markdown("Análisis estratégico de insatisfacción y reclamos ingresados.")
-            
-            if not df_q.empty:
-                st.markdown("### 🔄 Panel de Filtro")
-                fc1, fc2, fc3 = st.columns(3)
+            # ---------------------------------------------------------
+            # LADO DERECHO: GESTIÓN DE QUEJAS
+            # ---------------------------------------------------------
+            with col_der_quejas:
+                st.header("⚠️ Auditoría de Quejas")
+                st.markdown("Análisis de insatisfacción y reclamos.")
                 
-                with fc1:
-                    if "Fecha_Filtro" in df_q.columns and not pd.api.types.is_datetime64_any_dtype(df_q["Fecha_Filtro"]):
-                        df_q["Fecha_Filtro"] = pd.to_datetime(df_q["Fecha_Filtro"])
-                    anos_disponibles = ["TODOS"] + sorted(list(df_q["Fecha_Filtro"].dt.year.dropna().unique()), reverse=True)
-                    anos_disponibles = [str(a) for a in anos_disponibles]
-                    ano_filtrado = st.selectbox("📅 Filtrar por Año:", options=anos_disponibles, index=0, key="sb_ctrl_ano")
-                    
-                with fc2:
-                    meses_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-                    df_temp_mes = df_q.copy()
+                if not df_q.empty:
+                    with st.expander("🔄 Filtro de Quejas", expanded=True):
+                        fc1, fc2, fc3 = st.columns(3)
+                        with fc1:
+                            if "Fecha_Filtro" in df_q.columns and not pd.api.types.is_datetime64_any_dtype(df_q["Fecha_Filtro"]):
+                                df_q["Fecha_Filtro"] = pd.to_datetime(df_q["Fecha_Filtro"])
+                            anos_disponibles = ["TODOS"] + sorted(list(df_q["Fecha_Filtro"].dt.year.dropna().unique()), reverse=True)
+                            ano_filtrado = st.selectbox("📅 Año:", options=[str(a) for a in anos_disponibles], index=0, key="sb_ctrl_ano")
+                            
+                        with fc2:
+                            meses_dict = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6: "Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+                            df_temp_mes = df_q.copy()
+                            if ano_filtrado != "TODOS":
+                                df_temp_mes = df_temp_mes[df_temp_mes["Fecha_Filtro"].dt.year == int(ano_filtrado)]
+                            meses_disp_nums = sorted(list(df_temp_mes["Mes_Num"].dropna().unique()))
+                            meses_disponibles = ["TODOS"] + [meses_dict[int(m)] for m in meses_disp_nums]
+                            mes_filtrado = st.selectbox("🗓️ Mes:", options=meses_disponibles, index=0, key="sb_ctrl_mes")
+                            
+                        with fc3:
+                            df_temp_canal = df_temp_mes.copy()
+                            if mes_filtrado != "TODOS":
+                                mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
+                                df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"] == mes_num_sel]
+                            canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
+                            canal_filtrado = st.selectbox("🔌 Canal:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
+
+                    df_q_filtrado = df_q.copy()
                     if ano_filtrado != "TODOS":
-                        df_temp_mes = df_temp_mes[df_temp_mes["Fecha_Filtro"].dt.year == int(ano_filtrado)]
-                    meses_disp_nums = sorted(list(df_temp_mes["Mes_Num"].dropna().unique()))
-                    meses_disponibles = ["TODOS"] + [meses_dict[int(m)] for m in meses_disp_nums]
-                    mes_filtrado = st.selectbox("🗓️ Filtrar por Mes:", options=meses_disponibles, index=0, key="sb_ctrl_mes")
-                    
-                with fc3:
-                    df_temp_canal = df_temp_mes.copy()
+                        df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
                     if mes_filtrado != "TODOS":
                         mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
-                        df_temp_canal = df_temp_canal[df_temp_canal["Mes_Num"] == mes_num_sel]
-                    canales_disponibles = ["TODOS"] + sorted(list(df_temp_canal["canal de venta"].dropna().unique()))
-                    canal_filtrado = st.selectbox("🔌 Filtrar por Canal de Venta:", options=canales_disponibles, index=0, key="sb_ctrl_canal")
+                        df_q_filtrado = df_q_filtrado[df_q_filtrado["Mes_Num"] == mes_num_sel]
+                    if canal_filtrado != "TODOS":
+                        df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
 
-                df_q_filtrado = df_q.copy()
-                if ano_filtrado != "TODOS":
-                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Fecha_Filtro"].dt.year == int(ano_filtrado)]
-                if mes_filtrado != "TODOS":
-                    mes_num_sel = [k for k, v in meses_dict.items() if v == mes_filtrado][0]
-                    df_q_filtrado = df_q_filtrado[df_q_filtrado["Mes_Num"] == mes_num_sel]
-                if canal_filtrado != "TODOS":
-                    df_q_filtrado = df_q_filtrado[df_q_filtrado["canal de venta"] == canal_filtrado]
-
-                st.markdown("---")
-                tot_quejas = len(df_q_filtrado)
-                
-                casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
-                tot_resueltos = len(casos_resueltos)
-                tot_abiertos = tot_quejas - tot_resueltos
-                tasa_resolucion = (tot_resueltos / tot_quejas * 100) if tot_quejas > 0 else 0.0
-                
-                cq1, cq2, cq3 = st.columns(3)
-                with cq1: st.metric("Volumen de Quejas (Segmento Actual)", f"{tot_quejas} casos")
-                with cq2: st.metric("Casos Abiertos / Pendientes", f"{tot_abiertos} activos")
-                with cq3: st.metric("Tasa de Resolución del Filtro", f"{tasa_resolucion:.1f}%", f"{tot_resueltos} solucionados")
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                cg_col1, cg_col2 = st.columns(2)
-                
-                with cg_col1:
-                    st.markdown("#### 📊 Embudo: Volumen por Categorización del Reclamo")
-                    df_funnel = df_q_filtrado["Categorizacion del Reclamo"].value_counts().reset_index()
-                    df_funnel.columns = ["Categorizacion del Reclamo", "Casos"]
+                    st.markdown("---")
+                    tot_quejas = len(df_q_filtrado)
+                    casos_resueltos = df_q_filtrado[df_q_filtrado["Reporte tratado por"].str.contains("CERR|SOLUC|FINALIZ|OK|OK TALLER", na=False, case=False)]
+                    tot_resueltos = len(casos_resueltos)
+                    tot_abiertos = tot_quejas - tot_resueltos
+                    tasa_resolucion = (tot_resueltos / tot_quejas * 100) if tot_quejas > 0 else 0.0
                     
-                    if not df_funnel.empty:
-                        fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo", color="Categorizacion del Reclamo", color_discrete_sequence=px.colors.sequential.Reds_r)
-                        
-                        # Agregamos clickmode para que resalte la selección visualmente
-                        fig_funnel.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, clickmode='event+select')
-                        
-                        # Renderizamos el gráfico capturando el evento nativo de selección
-                        event_funnel = st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico", on_select="rerun", selection_mode="points")
-                        
-                        # Lógica para capturar el dato clickeado (Eje Y para embudos horizontales)
-                        if event_funnel and len(event_funnel.selection["points"]) > 0:
-                            st.session_state.filtro_cat_q = event_funnel.selection["points"][0]["y"]
-                        else:
-                            st.session_state.filtro_cat_q = "Todas"
-                            
-                        st.markdown(f"**Filtrado por Categoría:** `{st.session_state.filtro_cat_q}` (Haz clic en otra sección del gráfico para cambiar, o deselecciona para ver Todas)")
-                    else:
-                        st.info("Sin registros cargados para estructurar el Embudo.")
-                        
-                with cg_col2:
-                    st.markdown("#### 🏢 Columnas: Frecuencia por Sector Afectado")
-                    df_sectores = df_q_filtrado["Sector Afectado"].value_counts().reset_index()
-                    df_sectores.columns = ["Sector Afectado", "Casos"]
+                    cq1, cq2, cq3 = st.columns(3)
+                    with cq1: st.metric("Quejas", f"{tot_quejas} casos")
+                    with cq2: st.metric("Pendientes", f"{tot_abiertos} activos")
+                    with cq3: st.metric("Resolución", f"{tasa_resolucion:.1f}%")
                     
-                    if not df_sectores.empty:
-                        fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos", text="Casos", color="Casos", color_continuous_scale="Oranges")
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    cg_col1, cg_col2 = st.columns(2)
+                    
+                    with cg_col1:
+                        st.markdown("#### 📊 Embudo Reclamo")
+                        df_funnel = df_q_filtrado["Categorizacion del Reclamo"].value_counts().reset_index()
+                        df_funnel.columns = ["Categorizacion del Reclamo", "Casos"]
                         
-                        # Agregamos clickmode para que resalte la selección visualmente
-                        fig_sectores.update_layout(height=290, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False, clickmode='event+select')
-                        
-                        # Renderizamos el gráfico capturando el evento nativo de selección
-                        event_sec = st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico", on_select="rerun", selection_mode="points")
-                        
-                        # Lógica para capturar el dato clickeado (Eje X para barras verticales)
-                        if event_sec and len(event_sec.selection["points"]) > 0:
-                            st.session_state.filtro_sec_q = event_sec.selection["points"][0]["x"]
-                        else:
-                            st.session_state.filtro_sec_q = "Todos"
+                        if not df_funnel.empty:
+                            fig_funnel = px.funnel(df_funnel.head(12), x="Casos", y="Categorizacion del Reclamo", color="Categorizacion del Reclamo", color_discrete_sequence=px.colors.sequential.Reds_r)
+                            fig_funnel.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, clickmode='event+select')
                             
-                        st.markdown(f"**Filtrado por Sector:** `{st.session_state.filtro_sec_q}` (Haz clic en otra barra para cambiar, o deselecciona para ver Todos)")
-                    else:
-                        st.info("Sin registros cargados para estructurar las barras de sectores.")
+                            event_funnel = st.plotly_chart(fig_funnel, use_container_width=True, key="funnel_quejas_dinamico", on_select="rerun", selection_mode="points")
+                            
+                            if event_funnel and len(event_funnel.selection["points"]) > 0:
+                                st.session_state.filtro_cat_q = event_funnel.selection["points"][0]["y"]
+                            else:
+                                st.session_state.filtro_cat_q = "Todas"
+                                
+                            st.caption(f"Categoría: `{st.session_state.filtro_cat_q}`")
+                        else:
+                            st.info("Sin registros.")
+                            
+                    with cg_col2:
+                        st.markdown("#### 🏢 Sectores")
+                        df_sectores = df_q_filtrado["Sector Afectado"].value_counts().reset_index()
+                        df_sectores.columns = ["Sector Afectado", "Casos"]
                         
-                st.markdown("---")
-                st.markdown("### 🔍 Central de Monitoreo Dinámico")
-                
-                df_visual_q = df_q_filtrado.copy()
-                if st.session_state.filtro_cat_q != "Todas":
-                    df_visual_q = df_visual_q[df_visual_q["Categorizacion del Reclamo"] == st.session_state.filtro_cat_q]
-                if st.session_state.filtro_sec_q != "Todos":
-                    df_visual_q = df_visual_q[df_visual_q["Sector Afectado"] == st.session_state.filtro_sec_q]
-                
-                # Seguridad: Si por algún motivo la caché no encuentra la columna, la forzamos
-                if "comentario" not in df_visual_q.columns:
-                    df_visual_q["comentario"] = "Sin comentarios cargados"
+                        if not df_sectores.empty:
+                            fig_sectores = px.bar(df_sectores.head(12), x="Sector Afectado", y="Casos", text="Casos", color="Casos", color_continuous_scale="Oranges")
+                            fig_sectores.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, coloraxis_showscale=False, clickmode='event+select')
+                            
+                            event_sec = st.plotly_chart(fig_sectores, use_container_width=True, key="barras_sectores_dinamico", on_select="rerun", selection_mode="points")
+                            
+                            if event_sec and len(event_sec.selection["points"]) > 0:
+                                st.session_state.filtro_sec_q = event_sec.selection["points"][0]["x"]
+                            else:
+                                st.session_state.filtro_sec_q = "Todos"
+                                
+                            st.caption(f"Sector: `{st.session_state.filtro_sec_q}`")
+                        else:
+                            st.info("Sin registros.")
+                            
+                    st.markdown("---")
+                    st.markdown("### 🔍 Detalle de Quejas")
+                    
+                    df_visual_q = df_q_filtrado.copy()
+                    if st.session_state.filtro_cat_q != "Todas":
+                        df_visual_q = df_visual_q[df_visual_q["Categorizacion del Reclamo"] == st.session_state.filtro_cat_q]
+                    if st.session_state.filtro_sec_q != "Todos":
+                        df_visual_q = df_visual_q[df_visual_q["Sector Afectado"] == st.session_state.filtro_sec_q]
+                    
+                    if "comentario" not in df_visual_q.columns:
+                        df_visual_q["comentario"] = "Sin comentarios cargados"
 
-                # Definimos estrictamente las 6 columnas solicitadas
-                columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario"]
-                
-                df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
-                    "tipo de queja": "Tipo de Queja", 
-                    "marca": "Marca", 
-                    "cliente": "Cliente", 
-                    "vendedor": "Vendedor",
-                    "canal de venta": "Canal de Venta", 
-                    "comentario": "Comentario del Cliente"
-                })
-                
-                buscar_queja = st.text_input("🔍 Buscar quejas específicas por palabra clave:", "", key="search_quejas_dinamico_input").strip()
-                if buscar_queja:
-                    mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
-                    df_tabla_final = df_tabla_final[mascara]
-                
-                # Renderizamos la tabla SIN column_config para que Streamlit auto-ajuste las 6 columnas a tu pantalla
-                st.dataframe(
-                    df_tabla_final, 
-                    use_container_width=True, 
-                    hide_index=True, 
-                    height=280
-                )
-            else:
-                st.info("No se encontraron registros de quejas correspondientes al criterio de filtro seleccionado.")
-    
+                    columnas_solicitadas = ["tipo de queja", "marca", "cliente", "vendedor", "canal de venta", "comentario"]
+                    df_tabla_final = df_visual_q[columnas_solicitadas].rename(columns={
+                        "tipo de queja": "Tipo", "marca": "Marca", "cliente": "Cliente", "vendedor": "Vendedor",
+                        "canal de venta": "Canal", "comentario": "Comentario del Cliente"
+                    })
+                    
+                    buscar_queja = st.text_input("🔍 Buscar palabra clave en quejas:", "", key="search_quejas_dinamico_input").strip()
+                    if buscar_queja:
+                        mascara = df_tabla_final.astype(str).apply(lambda x: x.str.contains(buscar_queja, case=False, na=False)).any(axis=1)
+                        df_tabla_final = df_tabla_final[mascara]
+                    
+                    st.dataframe(df_tabla_final, use_container_width=True, hide_index=True, height=280)
+                else:
+                    st.info("No se encontraron registros de quejas.")
+
         # ==========================================================
-        # 🏆 TAB 6: PRIMA DE CALIDAD (ENC ROAR)
+        # 🏆 TAB 5: PRIMA DE CALIDAD (ENC ROAR)
         # ==========================================================
         with tab_prima:
             st.markdown("## 📊 Tablero de Auditoría y Liquidación: Prima de Calidad Venta")
