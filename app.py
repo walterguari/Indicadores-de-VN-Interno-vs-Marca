@@ -443,7 +443,7 @@ try:
             "🏠 Monitor Global Comparativo", 
             "👥 Tabla Unificada de Asesores", 
             "👤 Ficha Individual por Asesor",
-            "💬 Análisis de Voz y Quejas",
+            "💬 Análisis de Voz del cliente",
             "🏆 Prima de Calidad"
         ])
 
@@ -880,7 +880,7 @@ try:
             # LADO IZQUIERDO: VOZ DEL CLIENTE
             # ---------------------------------------------------------
             with col_izq_voz:
-                st.header("💬 Voz del Cliente")
+                st.header("💬 Voz del Cliente de la marca")
                 st.markdown("Inteligencia de Texto basada en las encuestas.")
                 
                 with st.expander("⚙️ Filtros de Voz del Cliente", expanded=True):
@@ -923,7 +923,7 @@ try:
                     st.plotly_chart(fig_linea_i, use_container_width=True)
                     
                 st.markdown("---")
-                st.markdown("### 📊 Temas Operativos")
+                st.markdown("### 📊 Categoria de la voz del cliente de la marca e interno")
                 col_bar_m, col_bar_i = st.columns(2)
                 
                 with col_bar_m:
@@ -951,7 +951,7 @@ try:
                         st.caption("No hay comentarios válidos.")
                         
                 st.markdown("---")
-                st.markdown("### 🔍 Perforación de Texto")
+                st.markdown("### 🔍 Comparación de la categoría")
                 categorias_fback_disp = ["TODAS", "ATENCIÓN Y ASESORAMIENTO", "PROCESO DE ENTREGA / TIEMPOS", "PRECIO Y FINANCIACIÓN", "ESTADO Y LIMPIEZA DEL VEHÍCULO", "GESTORÍA Y ADMINISTRACIÓN", "TEST DRIVE", "OTROS / GENERAL"]
                 cat_fback_sel = st.selectbox("📌 Filtrar por Categoría:", options=categorias_fback_disp, index=0, key="sb_feedback_cat_drill")
                 
@@ -985,7 +985,7 @@ try:
             # LADO DERECHO: GESTIÓN DE QUEJAS
             # ---------------------------------------------------------
             with col_der_quejas:
-                st.header("⚠️ Auditoría de Quejas")
+                st.header("⚠️ Voz del Cliente interno")
                 st.markdown("Análisis de insatisfacción y reclamos.")
                 
                 if not df_q.empty:
@@ -1093,7 +1093,7 @@ try:
                             st.info("Sin registros.")
                             
                     st.markdown("---")
-                    st.markdown("### 🔍 Detalle de Quejas")
+                    st.markdown("### 🔍 Detalle de Reclamos")
                     
                     df_visual_q = df_q_filtrado.copy()
                     if st.session_state.filtro_cat_q != "Todas":
