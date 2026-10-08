@@ -75,8 +75,8 @@ def load_data(url, tipo_base):
             else:
                 df["Vendedor"] = "SIN VENDEDOR"
             
-            if "Cliente" in df.columns:
-                df["Nombre de cliente"] = df["Cliente"]
+            if "CLIENTE" in df.columns:
+                df["Nombre de cliente"] = df["CLIENTE"]
             elif "Nombre de cliente" not in df.columns:
                 df["Nombre de cliente"] = "Cliente Autociel"
             
